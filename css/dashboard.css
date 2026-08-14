@@ -1,0 +1,15 @@
+/*
+ * App icon class — neutral Inspect360 app icon for settings section
+ * and dashboard widget headers before service-specific icons are added.
+ */
+
+.icon-inspect360 {
+	background-image: url('./../img/app.svg');
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+body.theme--dark .icon-inspect360 {
+	background-image: url('./../img/app-dark.svg');
+}

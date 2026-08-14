@@ -1,0 +1,13 @@
+# js/ intentionally tracked during pre-release for docker-host pulls.
+# Re-add `js/` here and rely on `make appstore` before the v1 tag.
+.code-workspace
+.DS_Store
+.idea/
+.vscode/
+.vscode-upload.json
+.*.sw*
+node_modules
+vendor/
+.phpunit.cache/
+.phpstan.cache/
+composer.lock

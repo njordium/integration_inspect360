@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>integration_inspect360</id>
+	<name>Inspect360 integration</name>
+	<summary>Nextcloud integration for Njordium Inspect360.</summary>
+	<description><![CDATA[Nextcloud integration app for Njordium Inspect360.
+
+This is a v0.0.1 scaffold. Structure, build tooling, dashboard and settings framework are in place; Inspect360-specific controllers, services and widget content are still to be wired. See the repository README for the current status.]]></description>
+	<version>0.0.1</version>
+	<licence>AGPL-3.0-or-later</licence>
+	<author homepage="https://njordium.com">Kim Haverblad</author>
+	<namespace>Inspect360</namespace>
+	<documentation>
+		<developer>https://github.com/njordium/integration_inspect360</developer>
+	</documentation>
+	<category>integration</category>
+	<category>dashboard</category>
+	<website>https://github.com/njordium/integration_inspect360</website>
+	<bugs>https://github.com/njordium/integration_inspect360/issues</bugs>
+	<repository type="git">https://github.com/njordium/integration_inspect360</repository>
+	<dependencies>
+		<php min-version="8.3"/>
+		<nextcloud min-version="30" max-version="35"/>
+	</dependencies>
+	<settings>
+		<admin>OCA\Inspect360\Settings\Admin</admin>
+		<admin-section>OCA\Inspect360\Settings\AdminSection</admin-section>
+		<personal>OCA\Inspect360\Settings\Personal</personal>
+		<personal-section>OCA\Inspect360\Settings\PersonalSection</personal-section>
+	</settings>
+</info>
