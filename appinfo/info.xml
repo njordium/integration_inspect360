@@ -20,7 +20,7 @@ Each widget carries a per-user refresh cadence (Never / 30s / 1m / 5m default / 
 Sign in with your Inspect360 email and password from Personal Settings → Connected accounts. The app exchanges your credentials for a JWT refresh token (stored encrypted via Nextcloud's ICrypto), discards the password, and mints short-lived access tokens on demand for every API call.
 
 Only Inspect360 accounts without multi-factor authentication are supported in this release — accounts with MFA enforced, password-change-required, or MFA-enrolment-required will see a targeted "not supported yet" message and can wait for a future release with OAuth 2.0 authorization-code flow.]]></description>
-	<version>0.4.1</version>
+	<version>0.4.2</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author homepage="https://njordium.com">Kim Haverblad</author>
 	<namespace>Inspect360</namespace>
@@ -32,6 +32,18 @@ Only Inspect360 accounts without multi-factor authentication are supported in th
 	<website>https://github.com/njordium/integration_inspect360</website>
 	<bugs>https://github.com/njordium/integration_inspect360/issues</bugs>
 	<repository type="git">https://github.com/njordium/integration_inspect360</repository>
+	<!--
+		Screenshots are pulled by the App Store from the raw GitHub URL
+		at release time. Add one <screenshot> element per image, in the
+		order you want them to appear in the store gallery (the first is
+		the hero shot on the listing card). The `small-thumbnail` gives
+		the App Store a lighter image for card previews.
+
+		Repository must be public for the App Store to fetch these; while
+		the repo is still private the images render only in the README
+		(relative-path reference), not in the App Store listing.
+	-->
+	<screenshot small-thumbnail="https://raw.githubusercontent.com/njordium/integration_inspect360/main/img/screenshot.png">https://raw.githubusercontent.com/njordium/integration_inspect360/main/img/screenshot.png</screenshot>
 	<dependencies>
 		<php min-version="8.3"/>
 		<nextcloud min-version="30" max-version="35"/>

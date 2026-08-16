@@ -4,6 +4,8 @@
 [![Latest release](https://img.shields.io/github/v/tag/njordium/integration_inspect360?label=release&sort=semver)](https://github.com/njordium/integration_inspect360/releases)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](COPYING)
 
+![Dashboard widgets](img/screenshot.png)
+
 > Njordium-authored Nextcloud integration for [Njordium Inspect360](https://njordium.com/products/inspect360/). Nextcloud **30 to 35**, PHP **8.3+**, Vue 3 / `@nextcloud/vue` v9, password-login → JWT-Bearer flow (OAuth 2.0 authorization-code planned upstream), five configurable dashboard widgets — an eight-tile KPI **Overview**, three vendor-lifecycle lists (**Approved**, **In Progress**, **Added Vendors**), and a recent **Assessed** feed. Per-widget refresh cadence, records-to-show, coloured status badges, relative-time meta, and every row deep-links back into ymir.
 
 Bring the parts of Inspect360 that a governance, risk or compliance team checks ten times a day into the Nextcloud dashboard. Vendor pipeline state, recent assessments, KPI counts across the supplier lifecycle, and one-click deep links to the corresponding page inside Inspect360. All configurable per user, per widget.
