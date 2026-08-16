@@ -28,7 +28,7 @@ class ApprovedVendorsWidget implements IWidget {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Inspect360: Approved Vendors');
+		return $this->l10n->t('I360: Approved Vendors');
 	}
 
 	public function getOrder(): int {

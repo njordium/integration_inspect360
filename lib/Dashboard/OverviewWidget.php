@@ -28,7 +28,7 @@ class OverviewWidget implements IWidget {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Inspect360: Overview');
+		return $this->l10n->t('I360: Overview');
 	}
 
 	public function getOrder(): int {

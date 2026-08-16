@@ -28,7 +28,7 @@ class AssessedWidget implements IWidget {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Inspect360: Assessed');
+		return $this->l10n->t('I360: Assessed');
 	}
 
 	public function getOrder(): int {

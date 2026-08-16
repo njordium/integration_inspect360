@@ -1,6 +1,32 @@
 <template>
-	<div class="inspect360-list">
-		<div v-if="loading && !loaded" class="state-line">
+	<div class="i360-widget i360-list">
+		<div class="i360-toolbar">
+			<NcActions :forceMenu="true">
+				<NcActionButton @click="fetch">
+					<template #icon>
+						<RefreshIcon :size="20" />
+					</template>
+					{{ t('integration_inspect360', 'Refresh now') }}
+				</NcActionButton>
+				<NcActionButton @click="showSettings = !showSettings">
+					<template #icon>
+						<CogOutlineIcon :size="20" />
+					</template>
+					{{ showSettings
+						? t('integration_inspect360', 'Hide widget settings')
+						: t('integration_inspect360', 'Widget settings') }}
+				</NcActionButton>
+			</NcActions>
+		</div>
+
+		<div v-if="showSettings" class="i360-settings">
+			<label class="i360-settings__label">{{ t('integration_inspect360', 'Refresh interval') }}</label>
+			<RefreshIntervalPicker
+				:modelValue="refreshIntervalSeconds"
+				@update:modelValue="onRefreshChange" />
+		</div>
+
+		<div v-if="loading && !loaded" class="i360-status">
 			<NcLoadingIcon :size="20" />
 			<span>{{ t('integration_inspect360', 'Loading…') }}</span>
 		</div>
@@ -33,43 +59,34 @@
 		</NcEmptyContent>
 
 		<template v-else>
-			<ul class="rows">
-				<li v-for="v in items" :key="v.id" class="row">
-					<a class="row-main" :href="link('/vendors/' + v.id)" target="_blank" rel="noopener">
-						<div class="row-title">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</div>
-						<div class="row-sub">
-							<span v-if="v.city">{{ v.city }}</span>
-							<span v-if="v.city && v.country"> · </span>
-							<span v-if="v.country">{{ v.country }}</span>
-							<span v-if="v.org_number" class="dim"> · {{ v.org_number }}</span>
+			<ul class="i360-rows">
+				<li v-for="v in items" :key="v.id" class="i360-row">
+					<a class="i360-row__link" :href="link('/vendors/' + v.id)" target="_blank" rel="noopener">
+						<div class="i360-row__top">
+							<span class="i360-row__title">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</span>
+							<span class="i360-chip" :class="'i360-chip--' + v.status">{{ prettyStatus(v.status) }}</span>
+						</div>
+						<div class="i360-row__meta">
+							<span v-if="v.city" class="i360-row__meta-item">{{ v.city }}</span>
+							<span v-if="v.country" class="i360-row__meta-item">{{ v.country }}</span>
+							<span v-if="v.org_number" class="i360-row__meta-item i360-row__meta-item--dim">{{ v.org_number }}</span>
+							<span v-if="v.critical_supplier_flag" class="i360-flag i360-flag--critical" :title="t('integration_inspect360', 'Critical supplier')">C</span>
+							<span v-if="v.ict_provider_flag" class="i360-flag i360-flag--ict" :title="t('integration_inspect360', 'ICT provider')">ICT</span>
+							<span v-if="v.data_processor_flag" class="i360-flag i360-flag--dp" :title="t('integration_inspect360', 'Data processor')">DP</span>
+							<span v-if="v.aml_regulated" class="i360-flag i360-flag--aml" :title="t('integration_inspect360', 'AML regulated')">AML</span>
 						</div>
 					</a>
-					<div class="row-side">
-						<span class="status" :class="'status--' + v.status">{{ prettyStatus(v.status) }}</span>
-						<div v-if="hasFlags(v)" class="flags">
-							<span v-if="v.critical_supplier_flag" class="flag flag--critical" :title="t('integration_inspect360', 'Critical supplier')">C</span>
-							<span v-if="v.ict_provider_flag" class="flag flag--ict" :title="t('integration_inspect360', 'ICT provider')">ICT</span>
-							<span v-if="v.data_processor_flag" class="flag flag--dp" :title="t('integration_inspect360', 'Data processor')">DP</span>
-							<span v-if="v.aml_regulated" class="flag flag--aml" :title="t('integration_inspect360', 'AML regulated')">AML</span>
-						</div>
-					</div>
 				</li>
 			</ul>
 
-			<div class="footer">
-				<a v-if="total > items.length" :href="link('/vendors' + (statusFilter ? '?status=' + statusFilter : ''))" target="_blank" rel="noopener" class="show-all">
-					{{ t('integration_inspect360', 'Show all ({total})', { total }) }}
-				</a>
-				<button class="settings-toggle" @click="showSettings = !showSettings">
-					<CogOutlineIcon :size="16" />
-					{{ t('integration_inspect360', 'Refresh') }}
-				</button>
-			</div>
-			<div v-if="showSettings" class="settings-body">
-				<RefreshIntervalPicker
-					:modelValue="refreshIntervalSeconds"
-					@update:modelValue="onRefreshChange" />
-			</div>
+			<a
+				v-if="total > items.length"
+				:href="link('/vendors' + (statusFilter ? '?status=' + statusFilter : ''))"
+				target="_blank"
+				rel="noopener"
+				class="i360-more">
+				{{ t('integration_inspect360', 'Show all ({total})', { total }) }}
+			</a>
 		</template>
 	</div>
 </template>
@@ -77,12 +94,15 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
+import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import ShieldCheckIcon from 'vue-material-design-icons/ShieldCheck.vue'
 import RefreshIntervalPicker from '../components/RefreshIntervalPicker.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
@@ -97,6 +117,8 @@ const STATUS_LABELS = {
 export default {
 	name: 'VendorsListWidget',
 	components: {
+		NcActionButton,
+		NcActions,
 		NcEmptyContent,
 		NcLoadingIcon,
 		RefreshIntervalPicker,
@@ -104,13 +126,14 @@ export default {
 		AlertCircleOutlineIcon,
 		CogOutlineIcon,
 		LinkOffIcon,
+		RefreshIcon,
 		ShieldCheckIcon,
 	},
 
 	props: {
-		endpoint: { type: String, required: true },     // e.g. 'vendors/approved' or 'vendors/added'
-		widgetKey: { type: String, required: true },    // e.g. 'inspect360_approved_vendors'
-		variant: { type: String, default: 'approved' }, // 'approved' | 'added' — drives icon + empty text + link filter
+		endpoint: { type: String, required: true },
+		widgetKey: { type: String, required: true },
+		variant: { type: String, default: 'approved' },
 	},
 
 	data() {
@@ -186,10 +209,6 @@ export default {
 			}
 		},
 
-		hasFlags(v) {
-			return v.critical_supplier_flag || v.ict_provider_flag || v.data_processor_flag || v.aml_regulated
-		},
-
 		prettyStatus(s) {
 			return STATUS_LABELS[s] || s || ''
 		},
@@ -213,139 +232,156 @@ export default {
 </script>
 
 <style scoped lang="scss">
-.inspect360-list {
-	padding: 4px 8px 8px;
+.i360-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+	overflow: hidden;
+	max-height: 500px;
+}
 
-	.state-line {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 12px 4px;
-		color: var(--color-text-maxcontrast);
-	}
+.i360-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	min-height: 32px;
+	margin-top: -8px;
+	margin-bottom: -4px;
+}
 
-	.rows {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-direction: column;
-	}
+.i360-settings {
+	padding: 6px 8px 10px;
+	border-bottom: 1px solid var(--color-border);
 
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 4px;
-		border-bottom: 1px solid var(--color-border);
-
-		&:last-child { border-bottom: none; }
-	}
-
-	.row-main {
-		flex: 1;
-		min-width: 0;
-		text-decoration: none;
-		color: inherit;
-	}
-
-	.row-title {
-		font-weight: 500;
-		font-size: 14px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.row-sub {
-		font-size: 12px;
-		color: var(--color-text-maxcontrast);
-		margin-top: 2px;
-
-		.dim { opacity: 0.7; }
-	}
-
-	.row-side {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 4px;
-		flex-shrink: 0;
-	}
-
-	.status {
-		display: inline-block;
-		padding: 1px 8px;
-		border-radius: 10px;
+	&__label {
+		display: block;
 		font-size: 11px;
-		font-weight: 500;
-		background: var(--color-background-hover);
-		color: var(--color-main-text);
-
-		&.status--approved     { background: color-mix(in srgb, var(--color-success) 20%, transparent); color: var(--color-success); }
-		&.status--under_review { background: color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); }
-		&.status--draft        { background: color-mix(in srgb, var(--color-primary-element) 15%, transparent); color: var(--color-primary-element); }
-		&.status--archived     { opacity: 0.7; }
-	}
-
-	.flags {
-		display: flex;
-		gap: 2px;
-	}
-
-	.flag {
-		display: inline-block;
-		padding: 0 5px;
-		font-size: 9px;
-		font-weight: 700;
-		border-radius: 3px;
-		background: var(--color-background-hover);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
 		color: var(--color-text-maxcontrast);
-		line-height: 14px;
-
-		&.flag--critical { background: var(--color-error); color: white; }
-		&.flag--ict      { background: var(--color-primary-element); color: white; }
-		&.flag--dp       { background: var(--color-info, #6b7280); color: white; }
-		&.flag--aml      { background: var(--color-warning); color: white; }
+		margin-bottom: 4px;
 	}
+}
 
-	.footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		margin-top: 8px;
-		padding-top: 6px;
-		border-top: 1px solid var(--color-border);
+.i360-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 16px 8px;
+	color: var(--color-text-maxcontrast);
+}
+
+.i360-rows {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	max-height: 380px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.i360-row {
+	border-radius: var(--border-radius);
+
+	&:hover {
+		background: var(--color-background-hover);
 	}
+}
 
-	.show-all {
-		font-size: 12px;
-		color: var(--color-primary-element);
-		text-decoration: none;
+.i360-row__link {
+	display: block;
+	padding: 6px 8px;
+	color: inherit;
+	text-decoration: none;
+	min-width: 0;
+}
 
-		&:hover { text-decoration: underline; }
-	}
+.i360-row__top {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
 
-	.settings-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
-		background: transparent;
-		border: none;
-		color: var(--color-text-maxcontrast);
-		font-size: 12px;
-		cursor: pointer;
-		border-radius: var(--border-radius);
-		margin-left: auto;
+.i360-row__title {
+	flex: 1;
+	min-width: 0;
+	font-weight: 500;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-		&:hover { background: var(--color-background-hover); }
-	}
+.i360-row__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 6px;
+	margin-top: 3px;
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+	min-width: 0;
+}
 
-	.settings-body {
-		margin-top: 8px;
-		max-width: 260px;
-	}
+.i360-row__meta-item {
+	white-space: nowrap;
+
+	&--dim { opacity: 0.7; }
+}
+
+/*
+ * Solid, high-contrast chips — the earlier translucent tint (~20% alpha) was
+ * near-invisible on Nextcloud's grey widget background. Fixed hues over
+ * theme variables so contrast is consistent in both light and dark mode.
+ */
+.i360-chip {
+	flex-shrink: 0;
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 16px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+	white-space: nowrap;
+
+	&--approved     { background: #16a34a; color: white; border-color: transparent; }
+	&--under_review { background: #ea580c; color: white; border-color: transparent; }
+	&--draft        { background: #6b7280; color: white; border-color: transparent; }
+	&--archived     { background: var(--color-background-hover); color: var(--color-text-maxcontrast); }
+}
+
+.i360-flag {
+	flex-shrink: 0;
+	display: inline-block;
+	padding: 0 5px;
+	font-size: 9px;
+	font-weight: 700;
+	border-radius: 3px;
+	line-height: 14px;
+	white-space: nowrap;
+
+	&--critical { background: #dc2626; color: white; }
+	&--ict      { background: #2563eb; color: white; }
+	&--dp       { background: #7c3aed; color: white; }
+	&--aml      { background: #d97706; color: white; }
+}
+
+.i360-more {
+	display: block;
+	padding: 6px 8px;
+	font-size: 12px;
+	color: var(--color-primary-element);
+	text-decoration: none;
+	border-top: 1px solid var(--color-border);
+	margin-top: 4px;
+
+	&:hover { text-decoration: underline; }
 }
 </style>

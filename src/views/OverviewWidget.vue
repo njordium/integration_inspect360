@@ -1,6 +1,32 @@
 <template>
-	<div class="inspect360-overview">
-		<div v-if="loading && !loaded" class="state-line">
+	<div class="i360-widget i360-overview">
+		<div class="i360-toolbar">
+			<NcActions :forceMenu="true">
+				<NcActionButton @click="fetch">
+					<template #icon>
+						<RefreshIcon :size="20" />
+					</template>
+					{{ t('integration_inspect360', 'Refresh now') }}
+				</NcActionButton>
+				<NcActionButton @click="showSettings = !showSettings">
+					<template #icon>
+						<CogOutlineIcon :size="20" />
+					</template>
+					{{ showSettings
+						? t('integration_inspect360', 'Hide widget settings')
+						: t('integration_inspect360', 'Widget settings') }}
+				</NcActionButton>
+			</NcActions>
+		</div>
+
+		<div v-if="showSettings" class="i360-settings">
+			<label class="i360-settings__label">{{ t('integration_inspect360', 'Refresh interval') }}</label>
+			<RefreshIntervalPicker
+				:modelValue="refreshIntervalSeconds"
+				@update:modelValue="onRefreshChange" />
+		</div>
+
+		<div v-if="loading && !loaded" class="i360-status">
 			<NcLoadingIcon :size="20" />
 			<span>{{ t('integration_inspect360', 'Loading…') }}</span>
 		</div>
@@ -23,58 +49,46 @@
 			</template>
 		</NcEmptyContent>
 
-		<div v-else class="tiles">
-			<a class="tile" :href="link('/vendors?status=approved')" target="_blank" rel="noopener">
-				<div class="tile-icon tile-icon--approved">
-					<CheckDecagramIcon :size="28" />
+		<div v-else class="i360-tiles">
+			<a class="i360-tile" :href="link('/vendors?status=approved')" target="_blank" rel="noopener">
+				<div class="i360-tile__icon i360-tile__icon--approved">
+					<CheckDecagramIcon :size="24" />
 				</div>
-				<div class="tile-body">
-					<div class="tile-value">{{ tiles.approved_vendors }}</div>
-					<div class="tile-label">{{ t('integration_inspect360', 'Approved Vendors') }}</div>
-				</div>
-			</a>
-
-			<a class="tile" :href="link('/vendors')" target="_blank" rel="noopener">
-				<div class="tile-icon tile-icon--total">
-					<DomainIcon :size="28" />
-				</div>
-				<div class="tile-body">
-					<div class="tile-value">{{ tiles.total_vendors }}</div>
-					<div class="tile-label">{{ t('integration_inspect360', 'Total Vendors') }}</div>
+				<div class="i360-tile__body">
+					<div class="i360-tile__value">{{ tiles.approved_vendors }}</div>
+					<div class="i360-tile__label">{{ t('integration_inspect360', 'Approved') }}</div>
 				</div>
 			</a>
 
-			<a class="tile" :href="link('/vendors?status=under_review')" target="_blank" rel="noopener">
-				<div class="tile-icon tile-icon--pending">
-					<EyeOutlineIcon :size="28" />
+			<a class="i360-tile" :href="link('/vendors')" target="_blank" rel="noopener">
+				<div class="i360-tile__icon i360-tile__icon--total">
+					<DomainIcon :size="24" />
 				</div>
-				<div class="tile-body">
-					<div class="tile-value">{{ tiles.pending_review }}</div>
-					<div class="tile-label">{{ t('integration_inspect360', 'Pending Review') }}</div>
+				<div class="i360-tile__body">
+					<div class="i360-tile__value">{{ tiles.total_vendors }}</div>
+					<div class="i360-tile__label">{{ t('integration_inspect360', 'Total Vendors') }}</div>
 				</div>
 			</a>
 
-			<a class="tile" :href="link('/services')" target="_blank" rel="noopener">
-				<div class="tile-icon tile-icon--services">
-					<PackageVariantIcon :size="28" />
+			<a class="i360-tile" :href="link('/vendors?status=under_review')" target="_blank" rel="noopener">
+				<div class="i360-tile__icon i360-tile__icon--pending">
+					<EyeOutlineIcon :size="24" />
 				</div>
-				<div class="tile-body">
-					<div class="tile-value">{{ tiles.total_services }}</div>
-					<div class="tile-label">{{ t('integration_inspect360', 'Total Services') }}</div>
+				<div class="i360-tile__body">
+					<div class="i360-tile__value">{{ tiles.pending_review }}</div>
+					<div class="i360-tile__label">{{ t('integration_inspect360', 'Pending Review') }}</div>
 				</div>
 			</a>
-		</div>
 
-		<div v-if="loaded" class="footer">
-			<button class="settings-toggle" @click="showSettings = !showSettings">
-				<CogOutlineIcon :size="16" />
-				{{ t('integration_inspect360', 'Refresh interval') }}
-			</button>
-			<div v-if="showSettings" class="settings-body">
-				<RefreshIntervalPicker
-					:modelValue="refreshIntervalSeconds"
-					@update:modelValue="onRefreshChange" />
-			</div>
+			<a class="i360-tile" :href="link('/services')" target="_blank" rel="noopener">
+				<div class="i360-tile__icon i360-tile__icon--services">
+					<PackageVariantIcon :size="24" />
+				</div>
+				<div class="i360-tile__body">
+					<div class="i360-tile__value">{{ tiles.total_services }}</div>
+					<div class="i360-tile__label">{{ t('integration_inspect360', 'Total Services') }}</div>
+				</div>
+			</a>
 		</div>
 	</div>
 </template>
@@ -82,6 +96,8 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
@@ -91,6 +107,7 @@ import DomainIcon from 'vue-material-design-icons/Domain.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import PackageVariantIcon from 'vue-material-design-icons/PackageVariant.vue'
+import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import RefreshIntervalPicker from '../components/RefreshIntervalPicker.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
 
@@ -99,6 +116,8 @@ const WIDGET_KEY = 'inspect360_overview'
 export default {
 	name: 'OverviewWidget',
 	components: {
+		NcActionButton,
+		NcActions,
 		NcEmptyContent,
 		NcLoadingIcon,
 		RefreshIntervalPicker,
@@ -109,6 +128,7 @@ export default {
 		EyeOutlineIcon,
 		LinkOffIcon,
 		PackageVariantIcon,
+		RefreshIcon,
 	},
 
 	data() {
@@ -172,102 +192,110 @@ export default {
 					generateUrl('/apps/integration_inspect360/widget/' + WIDGET_KEY + '/refresh-interval'),
 					{ seconds },
 				)
-			} catch { /* silent — user can retry, and next fetch reads server-side value */ }
+			} catch { /* silent — next fetch reads server-side value */ }
 		},
 	},
 }
 </script>
 
 <style scoped lang="scss">
-.inspect360-overview {
-	padding: 8px;
+.i360-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+	overflow: hidden;
+	max-height: 500px;
+}
 
-	.state-line {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 12px 4px;
+.i360-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	min-height: 32px;
+	margin-top: -8px;
+	margin-bottom: -4px;
+}
+
+.i360-settings {
+	padding: 6px 8px 10px;
+	border-bottom: 1px solid var(--color-border);
+
+	&__label {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
 		color: var(--color-text-maxcontrast);
+		margin-bottom: 4px;
 	}
+}
 
-	.tiles {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 8px;
+.i360-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 16px 8px;
+	color: var(--color-text-maxcontrast);
+}
+
+.i360-tiles {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	padding: 8px 4px 4px;
+}
+
+.i360-tile {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px;
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-hover);
+	text-decoration: none;
+	color: inherit;
+	transition: background 120ms ease;
+	overflow: hidden;
+
+	&:hover, &:focus-visible {
+		background: var(--color-primary-element-light);
+		outline: none;
 	}
+}
 
-	.tile {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 12px;
-		border-radius: var(--border-radius-large);
-		background: var(--color-background-hover);
-		text-decoration: none;
-		color: inherit;
-		transition: background 120ms ease;
+.i360-tile__icon {
+	flex-shrink: 0;
+	width: 36px;
+	height: 36px;
+	display: grid;
+	place-items: center;
+	border-radius: var(--border-radius);
+	color: white;
 
-		&:hover, &:focus-visible {
-			background: var(--color-primary-element-light);
-			outline: none;
-		}
-	}
+	&--approved { background: #16a34a; }
+	&--total    { background: var(--color-primary-element); }
+	&--pending  { background: #ea580c; }
+	&--services { background: #4b5563; }
+}
 
-	.tile-icon {
-		flex-shrink: 0;
-		width: 44px;
-		height: 44px;
-		display: grid;
-		place-items: center;
-		border-radius: var(--border-radius);
-		color: white;
+.i360-tile__body {
+	min-width: 0;
+}
 
-		&.tile-icon--approved { background: var(--color-success); }
-		&.tile-icon--total    { background: var(--color-primary-element); }
-		&.tile-icon--pending  { background: var(--color-warning); }
-		&.tile-icon--services { background: var(--color-info, #6b7280); }
-	}
+.i360-tile__value {
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
 
-	.tile-body {
-		min-width: 0;
-	}
-
-	.tile-value {
-		font-size: 22px;
-		font-weight: 700;
-		line-height: 1.1;
-	}
-
-	.tile-label {
-		font-size: 12px;
-		color: var(--color-text-maxcontrast);
-		margin-top: 2px;
-	}
-
-	.footer {
-		margin-top: 12px;
-		padding-top: 8px;
-		border-top: 1px solid var(--color-border);
-
-		.settings-toggle {
-			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			padding: 4px 8px;
-			background: transparent;
-			border: none;
-			color: var(--color-text-maxcontrast);
-			font-size: 12px;
-			cursor: pointer;
-			border-radius: var(--border-radius);
-
-			&:hover { background: var(--color-background-hover); }
-		}
-
-		.settings-body {
-			margin-top: 8px;
-			max-width: 260px;
-		}
-	}
+.i360-tile__label {
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+	margin-top: 2px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 </style>

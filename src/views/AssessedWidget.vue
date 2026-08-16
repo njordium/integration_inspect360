@@ -1,6 +1,32 @@
 <template>
-	<div class="inspect360-list">
-		<div v-if="loading && !loaded" class="state-line">
+	<div class="i360-widget i360-list">
+		<div class="i360-toolbar">
+			<NcActions :forceMenu="true">
+				<NcActionButton @click="fetch">
+					<template #icon>
+						<RefreshIcon :size="20" />
+					</template>
+					{{ t('integration_inspect360', 'Refresh now') }}
+				</NcActionButton>
+				<NcActionButton @click="showSettings = !showSettings">
+					<template #icon>
+						<CogOutlineIcon :size="20" />
+					</template>
+					{{ showSettings
+						? t('integration_inspect360', 'Hide widget settings')
+						: t('integration_inspect360', 'Widget settings') }}
+				</NcActionButton>
+			</NcActions>
+		</div>
+
+		<div v-if="showSettings" class="i360-settings">
+			<label class="i360-settings__label">{{ t('integration_inspect360', 'Refresh interval') }}</label>
+			<RefreshIntervalPicker
+				:modelValue="refreshIntervalSeconds"
+				@update:modelValue="onRefreshChange" />
+		</div>
+
+		<div v-if="loading && !loaded" class="i360-status">
 			<NcLoadingIcon :size="20" />
 			<span>{{ t('integration_inspect360', 'Loading…') }}</span>
 		</div>
@@ -33,39 +59,28 @@
 		</NcEmptyContent>
 
 		<template v-else>
-			<ul class="rows">
-				<li v-for="a in items" :key="a.id" class="row">
-					<a class="row-main" :href="link('/assessments/' + a.id)" target="_blank" rel="noopener">
-						<div class="row-title">{{ a.supplier_name || t('integration_inspect360', '(unnamed vendor)') }}</div>
-						<div class="row-sub">
-							<span>{{ prettyStatus(a.status) }}</span>
-							<span v-if="a.current_screen" class="dim"> · {{ a.current_screen }}</span>
-							<span v-if="a.updated_at" class="dim"> · {{ relativeTime(a.updated_at) }}</span>
+			<ul class="i360-rows">
+				<li v-for="a in items" :key="a.id" class="i360-row">
+					<a class="i360-row__link" :href="link('/assessments/' + a.id)" target="_blank" rel="noopener">
+						<div class="i360-row__top">
+							<span class="i360-row__title">{{ a.supplier_name || t('integration_inspect360', '(unnamed vendor)') }}</span>
+							<span v-if="finalRisk(a)" class="i360-risk" :class="'i360-risk--' + finalRisk(a).toLowerCase()">
+								{{ finalRisk(a) }}
+							</span>
+						</div>
+						<div class="i360-row__meta">
+							<span class="i360-row__meta-item">{{ prettyStatus(a.status) }}</span>
+							<span v-if="a.current_screen" class="i360-row__meta-item i360-row__meta-item--dim">{{ a.current_screen }}</span>
+							<span v-if="a.updated_at" class="i360-row__meta-item i360-row__meta-item--dim">{{ relativeTime(a.updated_at) }}</span>
+							<span v-if="a.decision" class="i360-chip i360-chip--decision">{{ a.decision }}</span>
 						</div>
 					</a>
-					<div class="row-side">
-						<span v-if="finalRisk(a)" class="risk" :class="'risk--' + finalRisk(a).toLowerCase()">
-							{{ finalRisk(a) }}
-						</span>
-						<span v-if="a.decision" class="decision">{{ a.decision }}</span>
-					</div>
 				</li>
 			</ul>
 
-			<div class="footer">
-				<a :href="link('/assessments')" target="_blank" rel="noopener" class="show-all">
-					{{ t('integration_inspect360', 'Show all assessments') }}
-				</a>
-				<button class="settings-toggle" @click="showSettings = !showSettings">
-					<CogOutlineIcon :size="16" />
-					{{ t('integration_inspect360', 'Refresh') }}
-				</button>
-			</div>
-			<div v-if="showSettings" class="settings-body">
-				<RefreshIntervalPicker
-					:modelValue="refreshIntervalSeconds"
-					@update:modelValue="onRefreshChange" />
-			</div>
+			<a :href="link('/assessments')" target="_blank" rel="noopener" class="i360-more">
+				{{ t('integration_inspect360', 'Show all assessments') }}
+			</a>
 		</template>
 	</div>
 </template>
@@ -73,12 +88,15 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
 import ClipboardCheckIcon from 'vue-material-design-icons/ClipboardCheck.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
+import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import RefreshIntervalPicker from '../components/RefreshIntervalPicker.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
 
@@ -95,6 +113,8 @@ const STATUS_LABELS = {
 export default {
 	name: 'AssessedWidget',
 	components: {
+		NcActionButton,
+		NcActions,
 		NcEmptyContent,
 		NcLoadingIcon,
 		RefreshIntervalPicker,
@@ -102,6 +122,7 @@ export default {
 		ClipboardCheckIcon,
 		CogOutlineIcon,
 		LinkOffIcon,
+		RefreshIcon,
 	},
 
 	data() {
@@ -195,123 +216,154 @@ export default {
 </script>
 
 <style scoped lang="scss">
-.inspect360-list {
-	padding: 4px 8px 8px;
+.i360-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+	overflow: hidden;
+	max-height: 500px;
+}
 
-	.state-line {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 12px 4px;
-		color: var(--color-text-maxcontrast);
-	}
+.i360-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	min-height: 32px;
+	margin-top: -8px;
+	margin-bottom: -4px;
+}
 
-	.rows {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-	}
+.i360-settings {
+	padding: 6px 8px 10px;
+	border-bottom: 1px solid var(--color-border);
 
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 4px;
-		border-bottom: 1px solid var(--color-border);
-
-		&:last-child { border-bottom: none; }
-	}
-
-	.row-main {
-		flex: 1;
-		min-width: 0;
-		text-decoration: none;
-		color: inherit;
-	}
-
-	.row-title {
-		font-weight: 500;
-		font-size: 14px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.row-sub {
-		font-size: 12px;
-		color: var(--color-text-maxcontrast);
-		margin-top: 2px;
-
-		.dim { opacity: 0.7; }
-	}
-
-	.row-side {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 4px;
-		flex-shrink: 0;
-	}
-
-	.risk {
-		display: inline-block;
-		padding: 1px 8px;
-		border-radius: 10px;
+	&__label {
+		display: block;
 		font-size: 11px;
-		font-weight: 600;
-		background: var(--color-background-hover);
-		color: var(--color-main-text);
 		text-transform: uppercase;
-		letter-spacing: 0.3px;
-
-		&.risk--low      { background: color-mix(in srgb, var(--color-success) 20%, transparent); color: var(--color-success); }
-		&.risk--medium   { background: color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); }
-		&.risk--high     { background: color-mix(in srgb, var(--color-error) 20%, transparent); color: var(--color-error); }
-		&.risk--critical { background: var(--color-error); color: white; }
-	}
-
-	.decision {
-		font-size: 10px;
+		letter-spacing: 0.4px;
 		color: var(--color-text-maxcontrast);
+		margin-bottom: 4px;
 	}
+}
 
-	.footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		margin-top: 8px;
-		padding-top: 6px;
-		border-top: 1px solid var(--color-border);
+.i360-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 16px 8px;
+	color: var(--color-text-maxcontrast);
+}
+
+.i360-rows {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	max-height: 380px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.i360-row {
+	border-radius: var(--border-radius);
+
+	&:hover {
+		background: var(--color-background-hover);
 	}
+}
 
-	.show-all {
-		font-size: 12px;
-		color: var(--color-primary-element);
-		text-decoration: none;
+.i360-row__link {
+	display: block;
+	padding: 6px 8px;
+	color: inherit;
+	text-decoration: none;
+	min-width: 0;
+}
 
-		&:hover { text-decoration: underline; }
-	}
+.i360-row__top {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
 
-	.settings-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
-		background: transparent;
-		border: none;
-		color: var(--color-text-maxcontrast);
-		font-size: 12px;
-		cursor: pointer;
-		border-radius: var(--border-radius);
-		margin-left: auto;
+.i360-row__title {
+	flex: 1;
+	min-width: 0;
+	font-weight: 500;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-		&:hover { background: var(--color-background-hover); }
-	}
+.i360-row__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 6px;
+	margin-top: 3px;
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+	min-width: 0;
+}
 
-	.settings-body {
-		margin-top: 8px;
-		max-width: 260px;
-	}
+.i360-row__meta-item {
+	white-space: nowrap;
+
+	&--dim { opacity: 0.7; }
+}
+
+/*
+ * Solid, high-contrast risk chips — mapped to fixed hues (green/orange/
+ * red/dark-red) rather than theme variables so severity reads at a
+ * glance regardless of the user's Nextcloud theme.
+ */
+.i360-risk {
+	flex-shrink: 0;
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 16px;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+	white-space: nowrap;
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+
+	&--low      { background: #16a34a; color: white; }
+	&--medium   { background: #ea580c; color: white; }
+	&--high     { background: #dc2626; color: white; }
+	&--critical { background: #7f1d1d; color: white; }
+}
+
+.i360-chip {
+	flex-shrink: 0;
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 16px;
+	white-space: nowrap;
+
+	&--decision { background: #2563eb; color: white; }
+}
+
+.i360-more {
+	display: block;
+	padding: 6px 8px;
+	font-size: 12px;
+	color: var(--color-primary-element);
+	text-decoration: none;
+	border-top: 1px solid var(--color-border);
+	margin-top: 4px;
+
+	&:hover { text-decoration: underline; }
 }
 </style>

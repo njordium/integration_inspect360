@@ -28,7 +28,7 @@ class AddedVendorsWidget implements IWidget {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Inspect360: Added Vendors');
+		return $this->l10n->t('I360: Added Vendors');
 	}
 
 	public function getOrder(): int {

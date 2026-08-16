@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-08-16
+
+### Changed — widget UX polish (feedback from first live deploy)
+
+- **3-dot widget-settings menu (top-right)** on all four widgets, matching the `integration_forgejo_gitea` pattern. `NcActions` with `:forceMenu="true"` containing two actions: **Refresh now** (fires an immediate fetch) and **Widget settings** (toggles an inline settings panel just below the toolbar). Replaces the previous bottom-footer settings toggle.
+- **Vertical row layout** on the three list widgets: title + status chip on line 1, meta (city · country · org number · flag chips) on a wrapping line 2. Fixes the horizontal overflow where longer status text ("Under review") pushed chips beyond the widget's right edge on standard dashboard column widths.
+- **High-contrast solid chip colours** — approved (green #16a34a), under review (orange #ea580c), draft (grey #6b7280), and risk-level chips (green/orange/red/dark-red for low/medium/high/critical). Replaces the earlier 20 %-alpha tints that were near-invisible on Nextcloud's grey widget background.
+- **`overflow: hidden` + `max-height: 500 px`** on the widget root, with `max-height: 380 px` + internal `overflow-y: auto` on list bodies. Long lists scroll internally instead of pushing the widget vertically past the dashboard column.
+- **Widget titles shortened `Inspect360:` → `I360:`** (Overview / Approved Vendors / Added Vendors / Assessed) to give the actual widget name more headline room in the dashboard title bar.
+- **Flag chips (Critical / ICT / DP / AML)** now use distinct high-contrast colours (red / blue / purple / amber) instead of the near-invisible grey defaults.
+
+### Fixed
+
+- Duplicate settings surfaces removed — the old `.footer > .settings-toggle > .settings-body` block at the bottom of each widget is gone; refresh cadence now lives only in the 3-dot menu.
+
 ## [0.3.0] — 2026-08-16
 
 ### Security
