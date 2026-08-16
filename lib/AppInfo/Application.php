@@ -8,21 +8,14 @@
 namespace OCA\Inspect360\AppInfo;
 
 use OCP\AppFramework\App;
-use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\AppFramework\Bootstrap\IRegistrationContext;
 
-use OCA\Inspect360\Dashboard\ClosedIssuesWidget;
-use OCA\Inspect360\Dashboard\ClosedPRsWidget;
-use OCA\Inspect360\Dashboard\HeatmapWidget;
-use OCA\Inspect360\Dashboard\MilestonesWidget;
-use OCA\Inspect360\Dashboard\NotificationsWidget;
-use OCA\Inspect360\Dashboard\OpenIssuesWidget;
-use OCA\Inspect360\Dashboard\OpenPRsWidget;
-use OCA\Inspect360\Dashboard\PendingReviewsWidget;
-use OCA\Inspect360\Dashboard\RecentCommitsWidget;
-use OCA\Inspect360\Dashboard\RepoStatsWidget;
-use OCA\Inspect360\Dashboard\StatsWidget;
+use OCA\Inspect360\Dashboard\AddedVendorsWidget;
+use OCA\Inspect360\Dashboard\ApprovedVendorsWidget;
+use OCA\Inspect360\Dashboard\AssessedWidget;
+use OCA\Inspect360\Dashboard\OverviewWidget;
 
 class Application extends App implements IBootstrap {
 
@@ -33,17 +26,10 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
-		$context->registerDashboardWidget(StatsWidget::class);
-		$context->registerDashboardWidget(OpenIssuesWidget::class);
-		$context->registerDashboardWidget(NotificationsWidget::class);
-		$context->registerDashboardWidget(ClosedIssuesWidget::class);
-		$context->registerDashboardWidget(PendingReviewsWidget::class);
-		$context->registerDashboardWidget(OpenPRsWidget::class);
-		$context->registerDashboardWidget(ClosedPRsWidget::class);
-		$context->registerDashboardWidget(HeatmapWidget::class);
-		$context->registerDashboardWidget(RecentCommitsWidget::class);
-		$context->registerDashboardWidget(MilestonesWidget::class);
-		$context->registerDashboardWidget(RepoStatsWidget::class);
+		$context->registerDashboardWidget(OverviewWidget::class);
+		$context->registerDashboardWidget(ApprovedVendorsWidget::class);
+		$context->registerDashboardWidget(AddedVendorsWidget::class);
+		$context->registerDashboardWidget(AssessedWidget::class);
 	}
 
 	public function boot(IBootContext $context): void {

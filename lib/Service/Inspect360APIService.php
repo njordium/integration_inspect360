@@ -19,12 +19,14 @@ use Throwable;
  * owned by {@see Inspect360AuthService}; this class only knows how to make
  * an HTTP request and retry it once after a forced token refresh on 401.
  *
- * Business-logic methods below (getRepoIssues, getUserRepos, …) are
- * carryover from the integration_forgejo_gitea fork base and still target
- * the Forgejo/Gitea endpoint shape. They will be replaced with
- * Inspect360-specific methods (vendors, services, assessments, …) in the
- * Phase B widget release; kept in the interim as reference material and so
- * the carryover widgets have something to call while auth is being wired.
+ * The Inspect360 API returns three list envelope shapes across the entities
+ * we consume — the higher-level getSuppliers/getProducts/getAssessments
+ * methods normalise them all to `['items' => [...], 'total' => N]` so the
+ * controller and Vue widgets speak one shape.
+ *
+ *   - Suppliers: `{items, total, page, page_size, pages}`
+ *   - Products:  `{products, total, page, page_size}` (different key name)
+ *   - Assessments: raw array (no envelope)
  */
 class Inspect360APIService {
 
@@ -36,6 +38,75 @@ class Inspect360APIService {
 		private LoggerInterface $logger,
 		private Inspect360AuthService $auth,
 	) {
+	}
+
+	/**
+	 * Aggregate supplier counts — powers the Overview widget's tiles.
+	 *
+	 * @return array{total: int, active: int, archived: int, by_status: array<string, int>}|null
+	 *         Null when the request fails; callers surface that as a widget-level error.
+	 */
+	public function getSuppliersStats(string $instanceUrl, string $accessToken, string $userId): ?array {
+		$result = $this->request($instanceUrl, $accessToken, $userId, 'suppliers/stats');
+		if (isset($result['error'])) {
+			return null;
+		}
+		return [
+			'total' => (int) ($result['total'] ?? 0),
+			'active' => (int) ($result['active'] ?? 0),
+			'archived' => (int) ($result['archived'] ?? 0),
+			'by_status' => is_array($result['by_status'] ?? null) ? $result['by_status'] : [],
+		];
+	}
+
+	/**
+	 * Paginated supplier list. Query params (all optional):
+	 *   - status: 'approved'|'draft'|'under_review'|'archived'
+	 *   - limit, page
+	 *
+	 * The API default list scope is `active` only (excludes archived);
+	 * pass an explicit status if you need archived rows.
+	 *
+	 * @return array{items: array<int, array<string, mixed>>, total: int}
+	 */
+	public function getSuppliers(string $instanceUrl, string $accessToken, string $userId, array $params = []): array {
+		$result = $this->request($instanceUrl, $accessToken, $userId, 'suppliers', $params);
+		if (isset($result['error']) || !is_array($result)) {
+			return ['items' => [], 'total' => 0];
+		}
+		$items = is_array($result['items'] ?? null) ? $result['items'] : [];
+		return ['items' => $items, 'total' => (int) ($result['total'] ?? count($items))];
+	}
+
+	/**
+	 * Total product count — used for the Overview widget's "Total Services"
+	 * tile. Reads the `total` field of the paginated list response with the
+	 * smallest possible payload (limit=1, page=1).
+	 *
+	 * Returns -1 on failure so the caller can distinguish "0 real
+	 * products" from "the request failed".
+	 */
+	public function getProductsCount(string $instanceUrl, string $accessToken, string $userId): int {
+		$result = $this->request($instanceUrl, $accessToken, $userId, 'products', ['limit' => 1, 'page' => 1]);
+		if (isset($result['error']) || !is_array($result)) {
+			return -1;
+		}
+		return (int) ($result['total'] ?? 0);
+	}
+
+	/**
+	 * Recent assessments as a plain array. The Inspect360 assessments
+	 * endpoint does NOT use the paginated envelope — it returns a bare
+	 * array capped at the requested limit (default 20 upstream).
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function getAssessments(string $instanceUrl, string $accessToken, string $userId, array $params = []): array {
+		$result = $this->request($instanceUrl, $accessToken, $userId, 'assessments', $params);
+		if (isset($result['error']) || !is_array($result)) {
+			return [];
+		}
+		return $result;
 	}
 
 	/**
@@ -141,72 +212,6 @@ class Inspect360APIService {
 		}
 	}
 
-	/**
-	 * Total count for a paginated /api/v1/ endpoint, read from the
-	 * X-Total-Count response header rather than counting rows in the
-	 * body — so we return the real total even when it exceeds the
-	 * page size. Uses limit=1 to keep the transfer tiny; only the
-	 * header matters for the count.
-	 *
-	 * Returns -1 on error so the caller can distinguish "0 real
-	 * matches" from "the request failed."
-	 */
-	public function countByHeader(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $endpoint,
-		array $params = [],
-	): int {
-		return $this->doCountByHeader($instanceUrl, $accessToken, $userId, $endpoint, $params, false);
-	}
-
-	private function doCountByHeader(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $endpoint,
-		array $params,
-		bool $isRetry,
-	): int {
-		try {
-			$params['limit'] = 1;
-			$params['page'] = 1;
-			$url = rtrim($instanceUrl, '/') . '/api/v1/' . ltrim($endpoint, '/') . '?' . http_build_query($params);
-			$response = $this->clientService->newClient()->get($url, [
-				'headers' => [
-					'Authorization' => 'Bearer ' . $accessToken,
-					'Accept' => 'application/json',
-					'User-Agent' => self::USER_AGENT,
-				],
-				'timeout' => self::HTTP_TIMEOUT,
-				'http_errors' => false,
-			]);
-			$status = $response->getStatusCode();
-			if ($status === 401 && $userId !== '' && !$isRetry) {
-				$fresh = $this->auth->forceRefresh($userId);
-				if ($fresh === '') {
-					return -1;
-				}
-				return $this->doCountByHeader($instanceUrl, $fresh, $userId, $endpoint, $params, true);
-			}
-			if ($status >= 400) {
-				return -1;
-			}
-			return (int) $response->getHeader('X-Total-Count');
-		} catch (Throwable $e) {
-			$this->logger->warning('Inspect360 countByHeader failed', [
-				'endpoint' => $endpoint,
-				'reason' => $this->redactSecrets($e->getMessage(), $accessToken),
-			]);
-			return -1;
-		}
-	}
-
-	/**
-	 * Replace known-secret substrings with a fixed marker so the redacted
-	 * string is safe to write to the log. Empty secrets are ignored.
-	 */
 	private function redactSecrets(string $subject, string ...$secrets): string {
 		foreach ($secrets as $s) {
 			if ($s !== '') {
@@ -214,160 +219,5 @@ class Inspect360APIService {
 			}
 		}
 		return $subject;
-	}
-
-	// ---------------------------------------------------------------------
-	// Carryover business-logic methods (Forgejo/Gitea endpoint shape).
-	// These will be replaced with Inspect360 vendor/service/assessment
-	// methods in the Phase B widget release. Kept here so the carryover
-	// widget PHP + Vue continue to compile and run against a rejecting
-	// endpoint (404) while Phase A auth is being validated.
-	// ---------------------------------------------------------------------
-
-	public function getUser(string $instanceUrl, string $accessToken): array {
-		return $this->request($instanceUrl, $accessToken, '', 'user');
-	}
-
-	public function getUserRepos(string $instanceUrl, string $accessToken, string $userId, int $maxPages = 5): array {
-		$out = [];
-		for ($page = 1; $page <= $maxPages; $page++) {
-			$batch = $this->request($instanceUrl, $accessToken, $userId, 'user/repos', [
-				'page' => $page,
-				'limit' => 50,
-			]);
-			if (isset($batch['error']) || !is_array($batch) || empty($batch)) {
-				break;
-			}
-			foreach ($batch as $repo) {
-				if (isset($repo['full_name'])) {
-					$out[] = $repo;
-				}
-			}
-			if (count($batch) < 50) {
-				break;
-			}
-		}
-		return $out;
-	}
-
-	public function getRepoIssues(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $owner,
-		string $repo,
-		array $params = [],
-	): array {
-		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/issues';
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		return isset($result['error']) ? [] : (is_array($result) ? $result : []);
-	}
-
-	public function searchAllIssues(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		array $params = [],
-	): array {
-		$result = $this->request($instanceUrl, $accessToken, $userId, 'repos/issues/search', $params);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function countIssueSearch(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		array $params = [],
-	): int {
-		return $this->countByHeader($instanceUrl, $accessToken, $userId, 'repos/issues/search', $params);
-	}
-
-	public function getHeatmap(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $username,
-	): array {
-		if ($username === '') {
-			return [];
-		}
-		$result = $this->request(
-			$instanceUrl,
-			$accessToken,
-			$userId,
-			'users/' . rawurlencode($username) . '/heatmap',
-		);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function getNotifications(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		array $params = [],
-	): array {
-		$result = $this->request($instanceUrl, $accessToken, $userId, 'notifications', $params);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function markNotificationRead(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $threadId,
-	): bool {
-		$endpoint = 'notifications/threads/' . rawurlencode($threadId);
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, [], 'PATCH');
-		return !isset($result['error']);
-	}
-
-	public function getRepoCommits(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $owner,
-		string $repo,
-		array $params = [],
-	): array {
-		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/commits';
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function getRepoMilestones(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $owner,
-		string $repo,
-		array $params = [],
-	): array {
-		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/milestones';
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function getRepoDetails(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $owner,
-		string $repo,
-	): array {
-		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
-	}
-
-	public function getLatestRelease(
-		string $instanceUrl,
-		string $accessToken,
-		string $userId,
-		string $owner,
-		string $repo,
-	): array {
-		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/releases/latest';
-		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint);
-		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 }

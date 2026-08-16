@@ -2,33 +2,29 @@
  * @copyright Copyright (c) 2026 Njordium
  * @license AGPL-3.0-or-later
  *
- * Single shared dashboard bundle. Registers every Forgejo/Gitea widget id.
+ * Single shared dashboard bundle. Registers every Inspect360 widget id.
  * All PHP widget classes point their load() at the same bundle name so this
  * file is loaded once regardless of how many widgets are on the dashboard.
  */
 import { createApp } from 'vue'
-import HeatmapWidget from './views/HeatmapWidget.vue'
-import IssuesWidget from './views/IssuesWidget.vue'
-import MilestonesWidget from './views/MilestonesWidget.vue'
-import NotificationsWidget from './views/NotificationsWidget.vue'
-import PendingReviewsWidget from './views/PendingReviewsWidget.vue'
-import RecentCommitsWidget from './views/RecentCommitsWidget.vue'
-import RepoStatsWidget from './views/RepoStatsWidget.vue'
-import StatsWidget from './views/StatsWidget.vue'
+import AssessedWidget from './views/AssessedWidget.vue'
+import OverviewWidget from './views/OverviewWidget.vue'
+import VendorsListWidget from './views/VendorsListWidget.vue'
 import { applyGlobals } from './bootstrap.js'
 
 const WIDGETS = [
-	{ id: 'inspect360_open_issues', component: IssuesWidget, props: { state: 'open', itemType: 'issues' } },
-	{ id: 'inspect360_closed_issues', component: IssuesWidget, props: { state: 'closed', itemType: 'issues' } },
-	{ id: 'inspect360_open_prs', component: IssuesWidget, props: { state: 'open', itemType: 'pulls' } },
-	{ id: 'inspect360_closed_prs', component: IssuesWidget, props: { state: 'closed', itemType: 'pulls' } },
-	{ id: 'inspect360_heatmap', component: HeatmapWidget, props: {} },
-	{ id: 'inspect360_stats', component: StatsWidget, props: {} },
-	{ id: 'inspect360_notifications', component: NotificationsWidget, props: {} },
-	{ id: 'inspect360_commits', component: RecentCommitsWidget, props: {} },
-	{ id: 'inspect360_pending_reviews', component: PendingReviewsWidget, props: {} },
-	{ id: 'inspect360_milestones', component: MilestonesWidget, props: {} },
-	{ id: 'inspect360_repo_stats', component: RepoStatsWidget, props: {} },
+	{ id: 'inspect360_overview', component: OverviewWidget, props: {} },
+	{
+		id: 'inspect360_approved_vendors',
+		component: VendorsListWidget,
+		props: { endpoint: 'vendors/approved', widgetKey: 'inspect360_approved_vendors', variant: 'approved' },
+	},
+	{
+		id: 'inspect360_added_vendors',
+		component: VendorsListWidget,
+		props: { endpoint: 'vendors/added', widgetKey: 'inspect360_added_vendors', variant: 'added' },
+	},
+	{ id: 'inspect360_assessed', component: AssessedWidget, props: {} },
 ]
 
 document.addEventListener('DOMContentLoaded', () => {
