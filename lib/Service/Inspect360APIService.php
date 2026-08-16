@@ -189,12 +189,17 @@ class Inspect360APIService {
 			}
 
 			if ($status >= 400) {
+				// Log the exact status server-side; bucket to a coarse
+				// error code before returning to the browser (finding H-L4).
+				// Exposing the exact upstream status to the client would
+				// give an authenticated user a reconnaissance channel into
+				// upstream health / auth-vs-app failure boundary.
 				$this->logger->info('Inspect360 request returned non-2xx', [
 					'endpoint' => $endpoint,
 					'method' => $method,
 					'status' => $status,
 				]);
-				return ['error' => 'upstream_' . $status];
+				return ['error' => $status < 500 ? 'upstream_client_error' : 'upstream_server_error'];
 			}
 
 			$decoded = json_decode($body, true);

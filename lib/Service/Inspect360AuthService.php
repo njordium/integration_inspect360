@@ -9,6 +9,8 @@ declare(strict_types=1);
 namespace OCA\Inspect360\Service;
 
 use OCP\Http\Client\IClientService;
+use OCP\ICache;
+use OCP\ICacheFactory;
 use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -50,6 +52,20 @@ class Inspect360AuthService {
 	private const HTTP_TIMEOUT = 15;
 	private const USER_AGENT = 'Nextcloud Inspect360 integration';
 
+	// Access-token cache TTL buffer — subtracted from the upstream `expires_in`
+	// so a cached token that's about to expire mid-request is minted fresh
+	// rather than causing a 401→refresh round-trip inside the widget call.
+	private const CACHE_TTL_BUFFER_SECONDS = 30;
+	private const CACHE_TTL_MIN_SECONDS = 60;
+	private const CACHE_PREFIX = 'inspect360:at:';
+
+	// After a refresh attempt fails, wait briefly then re-read the distributed
+	// cache — a parallel worker may have won the refresh race and populated
+	// the cache with a valid token. Prevents finding H-M2's thundering-herd
+	// disconnect when four widgets fire simultaneously against a rotated
+	// refresh token.
+	private const REFRESH_RACE_RECHECK_DELAY_MICROSECONDS = 200_000;
+
 	/**
 	 * Per-request in-memory cache of decrypted access tokens keyed by userId.
 	 * Nextcloud DI hands out the same service instance for the lifetime of a
@@ -60,25 +76,35 @@ class Inspect360AuthService {
 	 */
 	private array $accessTokenCache = [];
 
+	/**
+	 * Distributed access-token cache — shared across all PHP-FPM workers
+	 * (Redis / APCu / memcached, whatever the Nextcloud instance has
+	 * configured) so the four dashboard widgets firing in parallel don't
+	 * each trigger their own /auth/refresh call. See finding H-M2.
+	 */
+	private ICache $cache;
+
 	public function __construct(
 		private IConfig $config,
 		private IClientService $clientService,
 		private LoggerInterface $logger,
 		private TokenStorage $tokens,
+		ICacheFactory $cacheFactory,
 	) {
+		$this->cache = $cacheFactory->createDistributed(Application::APP_ID);
 	}
 
 	/**
-	 * The admin-configured Inspect360 instance base URL (no trailing slash),
-	 * defaulting to the demo instance so a fresh install works out of the box
-	 * before the admin touches anything.
+	 * The admin-configured Inspect360 instance base URL (no trailing slash).
+	 * Returns an empty string when unset — the admin MUST configure this
+	 * explicitly under Administration → Connected accounts before any user
+	 * can sign in. Historical fallback to `https://ymir.njordium.io` was
+	 * removed in v0.3.0 (finding H-L2) to prevent an unaware admin from
+	 * silently routing user credentials to the Njordium demo tenant.
 	 */
 	public function getInstanceUrl(): string {
 		$stored = trim($this->config->getAppValue(Application::APP_ID, self::CONFIG_INSTANCE_URL, ''));
-		if ($stored === '') {
-			return 'https://ymir.njordium.io';
-		}
-		return rtrim($stored, '/');
+		return $stored === '' ? '' : rtrim($stored, '/');
 	}
 
 	/**
@@ -146,7 +172,7 @@ class Inspect360AuthService {
 		}
 
 		$this->tokens->setRefreshToken($userId, $refreshToken);
-		$this->accessTokenCache[$userId] = $accessToken;
+		$this->cacheAccessToken($userId, $accessToken, (int) ($body['expires_in'] ?? 900));
 
 		$claims = $this->decodeJwtClaims($accessToken);
 		$subject = (string) ($claims['sub'] ?? '');
@@ -164,9 +190,9 @@ class Inspect360AuthService {
 	}
 
 	/**
-	 * Returns a usable access token for the given user, minting a fresh one
-	 * from the stored refresh token if the in-request cache is empty or the
-	 * caller has just forced an invalidation via {@see forceRefresh()}.
+	 * Returns a usable access token for the given user. Tries the caches
+	 * in order — per-request in-memory, then the distributed cache — and
+	 * falls back to a /auth/refresh call only if both are empty.
 	 *
 	 * Returns an empty string when the user is not connected (no refresh
 	 * token stored) or when a refresh attempt fails — callers must treat
@@ -179,13 +205,18 @@ class Inspect360AuthService {
 		if (isset($this->accessTokenCache[$userId]) && $this->accessTokenCache[$userId] !== '') {
 			return $this->accessTokenCache[$userId];
 		}
+		$distributed = $this->readDistributedCache($userId);
+		if ($distributed !== '') {
+			$this->accessTokenCache[$userId] = $distributed;
+			return $distributed;
+		}
 		return $this->refreshAndCache($userId);
 	}
 
 	/**
-	 * Invalidate the in-request cache and mint a new access token from the
-	 * refresh token. Called by {@see Inspect360APIService} on a 401 response
-	 * to distinguish "cached token expired mid-request" from "credentials
+	 * Invalidate BOTH caches and mint a new access token from the refresh
+	 * token. Called by {@see Inspect360APIService} on a 401 response to
+	 * distinguish "cached token expired mid-request" from "credentials
 	 * genuinely revoked" — a fresh mint that also 401s is the latter.
 	 */
 	public function forceRefresh(string $userId): string {
@@ -193,22 +224,53 @@ class Inspect360AuthService {
 			return '';
 		}
 		unset($this->accessTokenCache[$userId]);
+		$this->cache->remove(self::CACHE_PREFIX . $userId);
 		return $this->refreshAndCache($userId);
 	}
 
 	/**
 	 * Clear all per-user auth state. The user will need to sign in again
 	 * with their Inspect360 email + password to reconnect.
+	 *
+	 * Best-effort attempts an upstream refresh-token revocation before
+	 * clearing local state (finding H-L1) so a leaked Nextcloud config
+	 * dump can't be used to mint access tokens after the user disconnects.
+	 * Failure of the revocation call does not abort the local disconnect —
+	 * the user's UI must always return to "not connected" and any stale
+	 * upstream token will hit natural expiry on its own.
 	 */
 	public function disconnect(string $userId): void {
 		if ($userId === '') {
 			return;
 		}
+		$this->revokeUpstream($userId);
 		$this->tokens->clear($userId);
 		unset($this->accessTokenCache[$userId]);
+		$this->cache->remove(self::CACHE_PREFIX . $userId);
 		$this->config->setUserValue($userId, Application::APP_ID, self::USER_KEY_EMAIL, '');
 		$this->config->setUserValue($userId, Application::APP_ID, self::USER_KEY_SUBJECT, '');
 		$this->config->setUserValue($userId, Application::APP_ID, self::USER_KEY_ROLE, '');
+	}
+
+	/**
+	 * Best-effort call to `/api/v1/auth/logout` with the stored refresh
+	 * token. Endpoint URL and body shape are educated guesses — will be
+	 * verified alongside `/auth/refresh` on the first real 15-min token
+	 * expiry against ymir. A missing endpoint (404) is silently accepted
+	 * because we always clear local state regardless.
+	 */
+	private function revokeUpstream(string $userId): void {
+		$instanceUrl = $this->getInstanceUrl();
+		if ($instanceUrl === '') {
+			return;
+		}
+		$refreshToken = $this->tokens->getRefreshToken($userId);
+		if ($refreshToken === '') {
+			return;
+		}
+		$this->post($instanceUrl . '/api/v1/auth/logout', [
+			'refresh_token' => $refreshToken,
+		]);
 	}
 
 	/**
@@ -224,8 +286,17 @@ class Inspect360AuthService {
 	}
 
 	/**
-	 * Mint a new access token from the stored refresh token, update the
-	 * cache. Returns the new token or '' on failure.
+	 * Mint a new access token from the stored refresh token, populate both
+	 * caches. Returns the new token or '' on failure.
+	 *
+	 * Thundering-herd handling (finding H-M2): on failure this re-checks
+	 * the distributed cache after a short delay. If a parallel worker
+	 * won the refresh race and rotated the refresh token, our copy of the
+	 * refresh token was silently invalidated and our /auth/refresh call
+	 * returned 401 — but the parallel worker's success populated the
+	 * distributed cache with a valid access token we can still use. The
+	 * re-check turns what would have been a spurious disconnect ("3 out
+	 * of 4 widgets show Not connected") into a normal cache hit.
 	 *
 	 * NOTE: refresh endpoint URL + request body shape are educated guesses
 	 * based on OAuth 2 conventions. First real integration run against
@@ -246,24 +317,28 @@ class Inspect360AuthService {
 			'refresh_token' => $refreshToken,
 		]);
 		if ($response === null) {
-			return '';
+			return $this->reReadCacheAfterRefreshRace($userId);
 		}
 		[$status, $body] = $response;
 
 		if ($status >= 400) {
-			// Refresh token no longer valid — a 401 here means the user must
-			// re-enter their credentials. We deliberately do NOT clear the
-			// stored refresh token: the UI's "reconnect" flow will overwrite
-			// it, and a transient upstream 500 shouldn't nuke the state.
+			// Refresh token no longer valid — a 401 here means either (a)
+			// the user genuinely needs to re-enter their credentials, OR
+			// (b) a parallel worker beat us to /auth/refresh and rotated
+			// the token out from under us. Distinguish by re-checking the
+			// distributed cache. We deliberately do NOT clear the stored
+			// refresh token — the UI's reconnect flow will overwrite it
+			// on real credential rotation, and a transient upstream 500
+			// shouldn't nuke otherwise-working state.
 			$this->logger->info('Inspect360 refresh failed', ['status' => $status]);
-			return '';
+			return $this->reReadCacheAfterRefreshRace($userId);
 		}
 
 		$access = (string) ($body['access_token'] ?? '');
 		if ($access === '') {
 			return '';
 		}
-		$this->accessTokenCache[$userId] = $access;
+		$this->cacheAccessToken($userId, $access, (int) ($body['expires_in'] ?? 900));
 
 		// Servers may rotate the refresh token on every use; persist the
 		// new one if present.
@@ -273,6 +348,32 @@ class Inspect360AuthService {
 		}
 
 		return $access;
+	}
+
+	/**
+	 * Write the access token to both caches with a TTL derived from the
+	 * upstream `expires_in` (default 900s if missing) minus a small buffer
+	 * so we mint a new one rather than serving a stale token to an
+	 * in-flight widget call.
+	 */
+	private function cacheAccessToken(string $userId, string $token, int $expiresIn): void {
+		$this->accessTokenCache[$userId] = $token;
+		$ttl = max(self::CACHE_TTL_MIN_SECONDS, $expiresIn - self::CACHE_TTL_BUFFER_SECONDS);
+		$this->cache->set(self::CACHE_PREFIX . $userId, $token, $ttl);
+	}
+
+	private function readDistributedCache(string $userId): string {
+		$cached = $this->cache->get(self::CACHE_PREFIX . $userId);
+		return is_string($cached) ? $cached : '';
+	}
+
+	private function reReadCacheAfterRefreshRace(string $userId): string {
+		usleep(self::REFRESH_RACE_RECHECK_DELAY_MICROSECONDS);
+		$distributed = $this->readDistributedCache($userId);
+		if ($distributed !== '') {
+			$this->accessTokenCache[$userId] = $distributed;
+		}
+		return $distributed;
 	}
 
 	/**

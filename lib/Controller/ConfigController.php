@@ -11,6 +11,7 @@ namespace OCA\Inspect360\Controller;
 
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\BruteForceProtection;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -51,7 +52,11 @@ class ConfigController extends Controller {
 	/**
 	 * Store admin config values. Validates the instance URL to prevent
 	 * common misconfigurations (missing scheme, plain-HTTP against a
-	 * non-loopback host).
+	 * non-loopback host) and, per finding H-M3, blocks internal / metadata
+	 * hosts independently of Nextcloud's `allow_local_remote_servers` flag
+	 * so an admin on a lab instance with the flag flipped cannot point the
+	 * integration at internal endpoints (cloud metadata, Docker sockets,
+	 * etc.) and have every user's login POST credentials to them.
 	 */
 	public function setAdminConfig(array $values): DataResponse {
 		$warnings = [];
@@ -64,6 +69,9 @@ class ConfigController extends Controller {
 				}
 				if (!in_array(strtolower($parsed['scheme']), ['http', 'https'], true)) {
 					return new DataResponse(['error' => 'invalid_instance_url_scheme'], Http::STATUS_BAD_REQUEST);
+				}
+				if (!$this->isSafeInstanceHost($parsed['host'])) {
+					return new DataResponse(['error' => 'internal_url_forbidden'], Http::STATUS_BAD_REQUEST);
 				}
 				if (strtolower($parsed['scheme']) === 'http' && !$this->isLoopbackHost($parsed['host'])) {
 					$warnings[] = 'http_url_not_recommended';
@@ -84,8 +92,15 @@ class ConfigController extends Controller {
 	 * required, MFA enrolment required) returns the specific status code so
 	 * the UI can render a targeted message.
 	 *
+	 * Nextcloud's bruteforce throttler is enabled on this endpoint (finding
+	 * H-M1): a session-authenticated user hammering the endpoint to
+	 * enumerate Inspect360 credentials will be back-off-throttled per email
+	 * after successive failures, without needing a per-endpoint rate-limit
+	 * primitive of our own.
+	 *
 	 * @NoAdminRequired
 	 */
+	#[BruteForceProtection(action: 'inspect360Login')]
 	public function credentialLogin(string $email, string $password): DataResponse {
 		if ($this->userId === null) {
 			return new DataResponse(['error' => 'no_session'], Http::STATUS_UNAUTHORIZED);
@@ -96,7 +111,11 @@ class ConfigController extends Controller {
 		}
 
 		$result = $this->auth->login($this->userId, $email, $password);
-		return new DataResponse($result, $this->httpStatusFor($result['status']));
+		$response = new DataResponse($result, $this->httpStatusFor($result['status']));
+		if ($result['status'] === Inspect360AuthService::STATUS_INVALID_CREDENTIALS) {
+			$response->throttle(['email' => $email]);
+		}
+		return $response;
 	}
 
 	/**
@@ -150,5 +169,49 @@ class ConfigController extends Controller {
 			|| $host === '127.0.0.1'
 			|| $host === '::1'
 			|| str_ends_with($host, '.localhost');
+	}
+
+	/**
+	 * Reject well-known internal / metadata hostnames and any host that
+	 * resolves to a private / reserved / link-local IP range. Loopback
+	 * is deliberately allowed (dev use case). Defense-in-depth on top of
+	 * Nextcloud's own `allow_local_remote_servers` block — a site admin
+	 * who has flipped that flag for other integrations should still not
+	 * accidentally hand every user's credentials to `169.254.169.254`.
+	 *
+	 * NOTE: this is a check-time DNS resolution; a determined admin
+	 * running an on-prem attack could rebind between check and use. That
+	 * scenario is out of scope (the trust boundary is admin), but the
+	 * check meaningfully raises the bar against accidental
+	 * misconfiguration and typo-driven SSRF.
+	 */
+	private function isSafeInstanceHost(string $host): bool {
+		$hostLower = strtolower($host);
+		if ($this->isLoopbackHost($hostLower)) {
+			return true;
+		}
+		$internalHostnames = [
+			'metadata',
+			'metadata.google.internal',
+			'metadata.aws.internal',
+			'instance-data',
+			'instance-data.ec2.internal',
+		];
+		if (in_array($hostLower, $internalHostnames, true)) {
+			return false;
+		}
+		$resolved = filter_var($host, FILTER_VALIDATE_IP) ?: @gethostbyname($host);
+		if (!filter_var($resolved, FILTER_VALIDATE_IP)) {
+			// Hostname failed to resolve — allow through and let the actual
+			// HTTP call fail later. Refusing on unresolved names would break
+			// deployments where Inspect360 is on a private DNS not visible
+			// to the Nextcloud host at admin-save time.
+			return true;
+		}
+		return filter_var(
+			$resolved,
+			FILTER_VALIDATE_IP,
+			FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+		) !== false;
 	}
 }

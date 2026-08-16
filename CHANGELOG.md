@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-16
+
+### Security
+
+First full security audit against OWASP Top 10 (2021) + API Security Top 10 (2023). 3 Medium + 5 Low findings shipped as fixes in this release.
+
+- **H-M1 (A07 / Bruteforce)** — `POST /login` now carries `#[BruteForceProtection(action: 'inspect360Login')]` and calls `$response->throttle(['email' => $email])` on invalid-credentials, so a session-authenticated user cannot use the Nextcloud instance to launder credential-stuffing traffic against Inspect360. (`lib/Controller/ConfigController.php`)
+- **H-M2 (A04 / Insecure Design)** — Distributed access-token cache (`OCP\ICacheFactory`) added to `Inspect360AuthService`, keyed per user with TTL derived from `expires_in`. Kills the thundering-herd refresh where four dashboard widgets firing in parallel each triggered their own `/auth/refresh` POST, with N-1 losing the refresh-token-rotation race. On refresh failure, service now re-reads the distributed cache before returning "not connected" to catch the case where a parallel worker won the race. (`lib/Service/Inspect360AuthService.php`)
+- **H-M3 (A10 / SSRF)** — `setAdminConfig` now rejects known internal / cloud-metadata hostnames (`metadata.google.internal`, `169.254.169.254` etc.) and any host that resolves to an RFC1918 / link-local / reserved IP range, independently of Nextcloud's site-wide `allow_local_remote_servers` flag. Loopback still allowed for dev. (`lib/Controller/ConfigController.php::isSafeInstanceHost`)
+- **H-L1 (A07 / Session)** — `disconnect()` now issues a best-effort `POST /api/v1/auth/logout` with the stored refresh token before clearing local state, so a leaked Nextcloud config snapshot cannot be replayed to mint access tokens after the user disconnects. (Endpoint URL is an educated guess pending upstream verification.) (`lib/Service/Inspect360AuthService.php::revokeUpstream`)
+- **H-L2 (A05 / Insecure Default)** — Removed the hardcoded fallback `https://ymir.njordium.io` from `getInstanceUrl()`. A fresh install now returns "not connected" until the admin explicitly configures the instance URL. The demo URL is kept only as a Vue placeholder attribute in the admin UI.
+- **H-L3 (A08 / Artifact hygiene)** — Deleted 11 carryover Forgejo/Gitea widget PHP classes (`lib/Dashboard/{OpenIssues,ClosedIssues,OpenPRs,ClosedPRs,Heatmap,Milestones,Notifications,PendingReviews,RecentCommits,RepoStats,Stats}Widget.php`), 8 corresponding Vue views (`src/views/*Widget.vue`) and 2 unused Vue components (`src/components/{ItemAvatar,LabelChip}.vue`). ~1200 lines of unregistered but shipped bytes removed from the artifact.
+- **H-L4 (A05 / Info leak)** — Upstream HTTP status codes are no longer echoed verbatim to the browser (`upstream_502` → `upstream_server_error`, etc.). Exact status is only logged server-side. (`lib/Service/Inspect360APIService.php::doRequest`)
+- **H-L5 (A03 / Defence-in-depth)** — `setRefreshInterval` now whitelists `widgetKey` against the four known widget IDs, preventing session-authenticated users from populating `oc_preferences` with arbitrary `<foo>_refresh_seconds` rows. (`lib/Controller/Inspect360APIController.php`)
+
+Accepted risks (documented in `SECURITY.md`):
+- JWT signature not verified on the Nextcloud side (I1) — only cosmetic claims read; upstream verifies on every API call.
+- Refresh endpoint URL / body shape unverified (I4) — will be pinned down on first live token expiry against ymir.
+- `nextcloud/ocp` dev-dep pinned to `dev-stable30` (I3) — phpstan lints against NC30 surface only; bump before v1.0.
+
 ## [0.2.0] — 2026-08-16
 
 ### Added

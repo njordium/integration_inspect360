@@ -29,6 +29,15 @@ class Inspect360APIController extends Controller {
 	private const MAX_ITEMS_PER_WIDGET = 30;
 	private const DEFAULT_REFRESH_SECONDS = 300;
 	private const ALLOWED_REFRESH_SECONDS = [0, 30, 60, 300, 900, 1800, 3600];
+	// Widget-key whitelist for setRefreshInterval (finding H-L5) — prevents
+	// authenticated users from populating oc_preferences with arbitrary
+	// `<foo>_refresh_seconds` rows.
+	private const KNOWN_WIDGET_KEYS = [
+		'inspect360_overview',
+		'inspect360_approved_vendors',
+		'inspect360_added_vendors',
+		'inspect360_assessed',
+	];
 
 	public function __construct(
 		string $appName,
@@ -154,8 +163,7 @@ class Inspect360APIController extends Controller {
 		if ($this->userId === null) {
 			return new DataResponse(['error' => 'no_session'], Http::STATUS_UNAUTHORIZED);
 		}
-		$widgetKey = preg_replace('/[^a-z0-9_]/', '', strtolower($widgetKey)) ?? '';
-		if ($widgetKey === '') {
+		if (!in_array($widgetKey, self::KNOWN_WIDGET_KEYS, true)) {
 			return new DataResponse(['error' => 'invalid_widget_key'], Http::STATUS_BAD_REQUEST);
 		}
 		if (!in_array($seconds, self::ALLOWED_REFRESH_SECONDS, true)) {
