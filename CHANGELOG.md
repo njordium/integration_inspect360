@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-08-16
+
+### Fixed — PHPUnit CI
+
+- `composer.json` `autoload-dev` now maps `OCP\` → `vendor/nextcloud/ocp/OCP/` and `OC\` → `vendor/nextcloud/ocp/OC/`, matching the pattern used in `integration_suitecrm`. Without these mappings, PHPUnit couldn't resolve `OCP\AppFramework\App` (the parent class of `Application`) when loading `Application::APP_ID`, and the smoke test errored at class-load.
+
 ## [0.4.4] — 2026-08-16
 
 ### Fixed — remaining CI failures after v0.4.3

@@ -18,7 +18,9 @@
 	},
 	"autoload-dev": {
 		"psr-4": {
-			"OCA\\Inspect360\\Tests\\": "tests/php/"
+			"OCA\\Inspect360\\Tests\\": "tests/php/",
+			"OCP\\": "vendor/nextcloud/ocp/OCP/",
+			"OC\\": "vendor/nextcloud/ocp/OC/"
 		}
 	},
 	"scripts": {
