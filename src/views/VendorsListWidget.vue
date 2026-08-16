@@ -52,10 +52,7 @@
 							<component :is="badgeIcon(v.status)" :size="16" />
 						</span>
 						<div class="i360-row__body">
-							<div class="i360-row__top">
-								<span class="i360-row__title">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</span>
-								<span class="i360-chip" :class="'i360-chip--' + v.status">{{ prettyStatus(v.status) }}</span>
-							</div>
+							<div class="i360-row__title" :title="v.org_name">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</div>
 							<div class="i360-row__meta">
 								<span v-if="v.city" class="i360-row__meta-item">{{ v.city }}</span>
 								<span v-if="v.country" class="i360-row__meta-item">{{ v.country }}</span>
@@ -71,12 +68,11 @@
 			</ul>
 
 			<a
-				v-if="total > items.length"
 				:href="link('/vendors' + (statusFilter ? '?status=' + statusFilter : ''))"
 				target="_blank"
 				rel="noopener"
 				class="i360-more">
-				<span>{{ t('integration_inspect360', 'Show all ({total})', { total }) }}</span>
+				<span>{{ t('integration_inspect360', 'Show all') }}</span>
 				<OpenInNewIcon :size="14" />
 			</a>
 		</template>
@@ -285,8 +281,6 @@ export default {
 	flex-direction: column;
 	gap: 4px;
 	padding: 4px 0;
-	overflow: hidden;
-	max-height: 520px;
 }
 
 .i360-toolbar {
@@ -325,7 +319,11 @@ export default {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	max-height: 400px;
+	// ~7 rows fit before the internal scrollbar appears. Row height is
+	// ~46 px (badge 28 + padding 6/6 + title + meta line). Widgets above 7
+	// entries scroll internally so the "Show all" link stays inside the
+	// dashboard chrome.
+	max-height: 322px;
 	overflow-y: auto;
 	overflow-x: hidden;
 }
@@ -369,21 +367,13 @@ export default {
 	min-width: 0;
 }
 
-.i360-row__top {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-width: 0;
-}
-
 .i360-row__title {
-	flex: 1;
-	min-width: 0;
 	font-weight: 500;
 	font-size: 13px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	min-width: 0;
 }
 
 .i360-row__meta {
@@ -401,25 +391,6 @@ export default {
 	white-space: nowrap;
 
 	&--dim { opacity: 0.7; }
-}
-
-.i360-chip {
-	flex-shrink: 0;
-	display: inline-block;
-	padding: 1px 8px;
-	border-radius: 10px;
-	font-size: 10px;
-	font-weight: 600;
-	line-height: 16px;
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	border: 1px solid var(--color-border);
-	white-space: nowrap;
-
-	&--approved     { background: #16a34a; color: white; border-color: transparent; }
-	&--under_review { background: #ea580c; color: white; border-color: transparent; }
-	&--draft        { background: #6b7280; color: white; border-color: transparent; }
-	&--archived     { background: var(--color-background-hover); color: var(--color-text-maxcontrast); }
 }
 
 .i360-flag {

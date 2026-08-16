@@ -215,8 +215,6 @@ export default {
 	flex-direction: column;
 	gap: 4px;
 	padding: 4px 0;
-	overflow: hidden;
-	max-height: 500px;
 }
 
 .i360-toolbar {

@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.3] — 2026-08-16
+## [0.3.4] — 2026-08-16
+
+### Changed
+
+- **Visible-row cap tightened to 7** on the list widgets — `max-height: 322px` on `.i360-rows` fits ~7 rows before the internal scrollbar appears. Prevents the widget from pushing the "Show all" link outside the dashboard chrome when `max_items > 7`.
+- **Removed the outer widget `max-height` + `overflow: hidden`** — with the inner list bounded by its own `max-height` + scroll, the widget takes its natural height (toolbar + list + Show all) and always fits within the dashboard slot.
+- **"Show all" label simplified to just "Show all"** + external-link icon on all three list widgets. Dropped the `(21)` / `(122)` count suffix and the `assessments` suffix — count is already visible on the Overview tile, and the icon signals the destination-in-new-tab semantic.
+- **Status text chip on vendor rows removed.** The circular status badge on the left already conveys status via colour (green approved, orange under-review, grey draft, darker archived). The redundant textual chip on the right was crowding the row and adding no new information.
+
+### Fixed
+
+- "Show all" link was rendering outside the widget's blue chrome on dashboard columns whose allocated height was smaller than the widget's `max-height: 520px`. Removing that outer cap plus reducing the internal list cap to ~7 rows keeps everything inside.
 
 ### Added
 

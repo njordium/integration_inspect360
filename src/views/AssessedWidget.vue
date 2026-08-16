@@ -70,7 +70,7 @@
 			</ul>
 
 			<a :href="link('/assessments')" target="_blank" rel="noopener" class="i360-more">
-				<span>{{ t('integration_inspect360', 'Show all assessments') }}</span>
+				<span>{{ t('integration_inspect360', 'Show all') }}</span>
 				<OpenInNewIcon :size="14" />
 			</a>
 		</template>
@@ -255,8 +255,6 @@ export default {
 	flex-direction: column;
 	gap: 4px;
 	padding: 4px 0;
-	overflow: hidden;
-	max-height: 520px;
 }
 
 .i360-toolbar {
@@ -295,7 +293,9 @@ export default {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	max-height: 400px;
+	// ~7 rows fit before the internal scrollbar appears — keeps "Show all"
+	// inside the dashboard chrome for any max_items setting.
+	max-height: 322px;
 	overflow-y: auto;
 	overflow-x: hidden;
 }
