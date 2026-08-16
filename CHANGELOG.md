@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-16
+
+### Fixed
+
+- **Widget runtime crash (root cause of v0.4.0 stuck-loading widgets).** `AccountPlusIcon` and `PlaylistCheckIcon` were registered in `VendorsListWidget.vue`'s `components:` block and referenced by the `emptyIcon()` computed, but the two `import` statements never landed on disk (a v0.4.0 Edit call failed silently and wasn't retried). Vue threw `ReferenceError` at mount, all list-widget renders never resolved, dashboard showed permanent spinners. Both imports added. Surfaced by the second security audit (finding F5).
+
+### Changed — security audit follow-ups (2026-08-16, delta since v0.3.0)
+
+- **F1 (A04 / API4 Unrestricted Resource Consumption)** — Overview response now cached server-side per user via `OCP\ICacheFactory::createDistributed()` with a 5-minute TTL. The 3 upstream calls (`/suppliers/stats` + `/products?limit=1` + `/assessments?limit=500`) fire at most once per 5 minutes per user regardless of dashboard-refresh cadence or manual Refresh clicks. Partial-failure responses are deliberately not cached so a transient upstream 500 doesn't lock out real numbers for 5 minutes. (`lib/Controller/Inspect360APIController.php`)
+- **F2 (A04 / Insecure Design)** — `getInProgressVendors()` now re-reads the access token from `Inspect360AuthService::getAccessToken()` between its two sequential upstream calls. Prevents a doubled `/auth/refresh` round-trip (and brief distributed-cache poisoning) when the cached access token expires exactly between call 1 and call 2. Preserves the H-M2 thundering-herd fix from v0.3.0.
+- **F4 (A05 / Input Validation defence-in-depth)** — `setWidgetPreferences` widened `$refresh_seconds` / `$max_items` to `mixed` and validates with `is_int()` before whitelist-checking. Previously PHP's typed-int coercion silently mapped `{"refresh_seconds":"abc"}` → `0`, which happened to land on the `Never` whitelist entry. No privilege escalation (whitelist absorbed the case), but rejecting garbage input at the boundary is the correct behaviour.
+
+### Notes
+
+- Info-level finding F3 (500-row assessments payload transiently in PHP-FPM RAM) is now moot — the F1 caching means the fetch happens at most once per 5 minutes and the array is garbage-collected immediately after `count()`.
+- Second full audit (SHA `686a240`) landed 0 release-blocking findings. Auth service, SSRF guard, secret redaction, bruteforce annotation and refresh-token storage from the v0.3.0 hardening pass all remain intact and are exercised by the new v0.4.x endpoints.
+
+### Cleanup
+
+- **eslint auto-fix** — 67 `curly` style errors across `src/**/*.vue` (single-line `if x return y` statements now consistently braced). No behaviour change.
+- **stylelint** — one `margin-left` in `PersonalSettings.vue` converted to logical `margin-inline-start` for proper RTL support.
+
 ## [0.4.0] — 2026-08-16
 
 ### Added

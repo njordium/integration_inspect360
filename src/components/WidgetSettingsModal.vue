@@ -1,7 +1,9 @@
 <template>
 	<NcModal size="small" @close="onCancel">
 		<div class="i360-modal">
-			<h2 class="i360-modal__title">{{ t('integration_inspect360', 'Widget settings') }}</h2>
+			<h2 class="i360-modal__title">
+				{{ t('integration_inspect360', 'Widget settings') }}
+			</h2>
 
 			<section class="i360-modal__section">
 				<h4>{{ t('integration_inspect360', 'Refresh frequency') }}</h4>
@@ -64,11 +66,13 @@ export default {
 		MaxItemsPicker,
 		ContentSaveIcon,
 	},
+
 	props: {
 		refreshSeconds: { type: Number, default: 300 },
 		maxItems: { type: Number, default: null },
 		saving: { type: Boolean, default: false },
 	},
+
 	emits: ['close', 'save'],
 	data() {
 		return {
@@ -76,27 +80,32 @@ export default {
 			draftMaxItems: this.maxItems ?? 10,
 		}
 	},
+
 	computed: {
 		showMaxItems() {
 			return this.maxItems !== null && this.maxItems !== undefined
 		},
 	},
+
 	watch: {
 		refreshSeconds(v) {
 			this.draftSeconds = v
 		},
+
 		maxItems(v) {
 			if (v !== null && v !== undefined) {
 				this.draftMaxItems = v
 			}
 		},
 	},
+
 	methods: {
 		onCancel() {
 			this.draftSeconds = this.refreshSeconds
 			this.draftMaxItems = this.maxItems ?? 10
 			this.$emit('close')
 		},
+
 		onSave() {
 			this.$emit('save', {
 				refreshSeconds: this.draftSeconds,

@@ -47,7 +47,11 @@
 		<template v-else>
 			<ul class="i360-rows">
 				<li v-for="a in items" :key="a.id" class="i360-row">
-					<a class="i360-row__link" :href="link('/assessments/' + a.id)" target="_blank" rel="noopener">
+					<a
+						class="i360-row__link"
+						:href="link('/assessments/' + a.id)"
+						target="_blank"
+						rel="noopener">
 						<span class="i360-badge" :class="'i360-badge--' + badgeVariant(a.status, finalRisk(a))">
 							<component :is="badgeIcon(a.status)" :size="16" />
 						</span>
@@ -69,7 +73,11 @@
 				</li>
 			</ul>
 
-			<a :href="link('/assessments')" target="_blank" rel="noopener" class="i360-more">
+			<a
+				:href="link('/assessments')"
+				target="_blank"
+				rel="noopener"
+				class="i360-more">
 				<span>{{ t('integration_inspect360', 'Show all') }}</span>
 				<OpenInNewIcon :size="14" />
 			</a>
@@ -191,31 +199,31 @@ export default {
 		},
 
 		badgeVariant(status, risk) {
-			if (status === 'approved' || status === 'completed') return 'approved'
-			if (status === 'rejected') return 'issues'
-			if (risk && (risk.toLowerCase() === 'high' || risk.toLowerCase() === 'critical')) return 'issues'
-			if (status === 'in_progress' || status === 'pending_review') return 'review'
+			if (status === 'approved' || status === 'completed') { return 'approved' }
+			if (status === 'rejected') { return 'issues' }
+			if (risk && (risk.toLowerCase() === 'high' || risk.toLowerCase() === 'critical')) { return 'issues' }
+			if (status === 'in_progress' || status === 'pending_review') { return 'review' }
 			return 'draft'
 		},
 
 		badgeIcon(status) {
-			if (status === 'approved' || status === 'completed') return CheckCircleIcon
-			if (status === 'rejected') return CloseCircleIcon
+			if (status === 'approved' || status === 'completed') { return CheckCircleIcon }
+			if (status === 'rejected') { return CloseCircleIcon }
 			return ClockOutlineIcon
 		},
 
 		relativeTime(iso) {
-			if (!iso) return ''
+			if (!iso) { return '' }
 			const then = new Date(iso).getTime()
-			if (!then) return ''
+			if (!then) { return '' }
 			const diff = Math.max(0, Date.now() - then)
 			const min = Math.floor(diff / 60000)
-			if (min < 1) return t('integration_inspect360', 'just now')
-			if (min < 60) return t('integration_inspect360', '{n} min ago', { n: min })
+			if (min < 1) { return t('integration_inspect360', 'just now') }
+			if (min < 60) { return t('integration_inspect360', '{n} min ago', { n: min }) }
 			const h = Math.floor(min / 60)
-			if (h < 24) return t('integration_inspect360', '{n}h ago', { n: h })
+			if (h < 24) { return t('integration_inspect360', '{n}h ago', { n: h }) }
 			const d = Math.floor(h / 24)
-			if (d < 7) return t('integration_inspect360', '{n}d ago', { n: d })
+			if (d < 7) { return t('integration_inspect360', '{n}d ago', { n: d }) }
 			return new Date(iso).toLocaleDateString()
 		},
 
@@ -240,8 +248,7 @@ export default {
 				}
 				this.showSettings = false
 				this.fetch()
-			} catch { /* silent */ }
-			finally {
+			} catch { /* silent */ } finally {
 				this.savingSettings = false
 			}
 		},

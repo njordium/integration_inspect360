@@ -111,6 +111,7 @@ export default {
 				role: s.role || '',
 				instance_url: s.instance_url || '',
 			},
+
 			email: '',
 			password: '',
 			loading: false,
@@ -131,7 +132,7 @@ export default {
 			return (this.state.role || '')
 				.split('_')
 				.filter(Boolean)
-				.map(w => w.charAt(0).toUpperCase() + w.slice(1))
+				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 				.join(' ')
 		},
 
@@ -158,7 +159,7 @@ export default {
 
 	methods: {
 		async onSignIn() {
-			if (!this.canSubmit) return
+			if (!this.canSubmit) { return }
 			this.loading = true
 			this.policyBlock = null
 			try {
@@ -282,7 +283,7 @@ export default {
 
 			.role-chip {
 				display: inline-block;
-				margin-left: 6px;
+				margin-inline-start: 6px;
 				padding: 1px 8px;
 				border-radius: 10px;
 				background: var(--color-background-hover);

@@ -18,6 +18,7 @@ export default {
 	props: {
 		modelValue: { type: Number, default: 10 },
 	},
+
 	emits: ['update:modelValue'],
 	computed: {
 		options() {
@@ -29,11 +30,13 @@ export default {
 				{ value: 100, label: t('integration_inspect360', '100 records') },
 			]
 		},
+
 		selected() {
 			return this.options.find((o) => o.value === this.modelValue)
 				|| this.options.find((o) => o.value === 10)
 		},
 	},
+
 	methods: {
 		onChange(v) {
 			if (v && typeof v === 'object' && 'value' in v) {

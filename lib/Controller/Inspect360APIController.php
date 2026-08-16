@@ -11,6 +11,8 @@ namespace OCA\Inspect360\Controller;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\ICache;
+use OCP\ICacheFactory;
 use OCP\IConfig;
 use OCP\IRequest;
 
@@ -45,6 +47,18 @@ class Inspect360APIController extends Controller {
 		'inspect360_assessed',
 	];
 
+	/**
+	 * Overview-response TTL cache. Prevents finding F1 (audit 2026-08-16):
+	 * without this, every widget refresh fires 3 upstream calls (stats +
+	 * products + a 500-row assessments fetch just to count). Cached for
+	 * 5 minutes per user; the client refresh button re-uses the cached
+	 * response until the TTL elapses.
+	 */
+	private const OVERVIEW_CACHE_KEY_PREFIX = 'i360:overview:';
+	private const OVERVIEW_CACHE_TTL_SECONDS = 300;
+
+	private ICache $cache;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -52,8 +66,10 @@ class Inspect360APIController extends Controller {
 		private Inspect360APIService $api,
 		private Inspect360AuthService $auth,
 		private ?string $userId,
+		ICacheFactory $cacheFactory,
 	) {
 		parent::__construct($appName, $request);
+		$this->cache = $cacheFactory->createDistributed(Application::APP_ID);
 	}
 
 	/**
@@ -67,6 +83,14 @@ class Inspect360APIController extends Controller {
 		[$instanceUrl, $accessToken, $err] = $this->credentials();
 		if ($err !== null) {
 			return $err;
+		}
+		// Serve cached response if fresh (F1 — kill 3-calls-per-refresh
+		// amplification, especially the 500-row assessments fetch just to
+		// derive one counter).
+		$cacheKey = self::OVERVIEW_CACHE_KEY_PREFIX . $this->userId;
+		$cached = $this->cache->get($cacheKey);
+		if (is_array($cached)) {
+			return new DataResponse($cached);
 		}
 		$stats = $this->api->getSuppliersStats($instanceUrl, $accessToken, $this->userId);
 		$productsTotal = $this->api->getProductsCount($instanceUrl, $accessToken, $this->userId);
@@ -83,7 +107,7 @@ class Inspect360APIController extends Controller {
 
 		$totalVendors = (int) ($stats['total'] ?? 0);
 		$archived = (int) ($byStatus['archived'] ?? 0);
-		return new DataResponse([
+		$payload = [
 			'tiles' => [
 				'approved_vendors' => (int) ($byStatus['approved'] ?? 0),
 				'drafts' => (int) ($byStatus['draft'] ?? 0),
@@ -102,7 +126,14 @@ class Inspect360APIController extends Controller {
 				'stats' => $stats === null ? 'unavailable' : null,
 				'products' => $productsTotal < 0 ? 'unavailable' : null,
 			],
-		]);
+		];
+		// Cache only on the happy path — never cache a partial-failure
+		// response so a transient upstream 500 doesn't lock users out of
+		// their real numbers for 5 minutes.
+		if ($stats !== null && $productsTotal >= 0) {
+			$this->cache->set($cacheKey, $payload, self::OVERVIEW_CACHE_TTL_SECONDS);
+		}
+		return new DataResponse($payload);
 	}
 
 	/**
@@ -166,6 +197,12 @@ class Inspect360APIController extends Controller {
 			'limit' => $maxItems,
 			'page' => 1,
 		]);
+		// F2: re-read the token between the two calls so that if a 401 on
+		// call 1 forced a refresh, call 2 uses the freshly-minted token
+		// from the in-memory cache instead of the stale snapshot. Prevents
+		// a second /auth/refresh round-trip and briefly poisoning the
+		// distributed cache that other tabs share.
+		$accessToken = $this->auth->getAccessToken($this->userId);
 		$review = $this->api->getSuppliers($instanceUrl, $accessToken, $this->userId, [
 			'status' => 'under_review',
 			'limit' => $maxItems,
@@ -242,8 +279,8 @@ class Inspect360APIController extends Controller {
 	 */
 	public function setWidgetPreferences(
 		string $widgetKey,
-		?int $refresh_seconds = null,
-		?int $max_items = null,
+		mixed $refresh_seconds = null,
+		mixed $max_items = null,
 	): DataResponse {
 		if ($this->userId === null) {
 			return new DataResponse(['error' => 'no_session'], Http::STATUS_UNAUTHORIZED);
@@ -251,8 +288,13 @@ class Inspect360APIController extends Controller {
 		if (!in_array($widgetKey, self::KNOWN_WIDGET_KEYS, true)) {
 			return new DataResponse(['error' => 'invalid_widget_key'], Http::STATUS_BAD_REQUEST);
 		}
+		// F4: reject non-integer JSON explicitly so garbage input like
+		// {"refresh_seconds":"abc"} isn't silently coerced to 0 (which
+		// would happen to hit the "Never refresh" whitelist entry).
+		// Framework's typed int param would do that coercion for us,
+		// so we widen to mixed and validate ourselves.
 		if ($refresh_seconds !== null) {
-			if (!in_array($refresh_seconds, self::ALLOWED_REFRESH_SECONDS, true)) {
+			if (!is_int($refresh_seconds) || !in_array($refresh_seconds, self::ALLOWED_REFRESH_SECONDS, true)) {
 				return new DataResponse(['error' => 'invalid_interval'], Http::STATUS_BAD_REQUEST);
 			}
 			$this->config->setUserValue(
@@ -263,7 +305,7 @@ class Inspect360APIController extends Controller {
 			);
 		}
 		if ($max_items !== null) {
-			if (!in_array($max_items, self::ALLOWED_MAX_ITEMS, true)) {
+			if (!is_int($max_items) || !in_array($max_items, self::ALLOWED_MAX_ITEMS, true)) {
 				return new DataResponse(['error' => 'invalid_max_items'], Http::STATUS_BAD_REQUEST);
 			}
 			$this->config->setUserValue(

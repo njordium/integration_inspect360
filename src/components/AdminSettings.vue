@@ -43,6 +43,7 @@ export default {
 			state: {
 				instance_url: initial.instance_url ?? '',
 			},
+
 			defaultInstanceUrl: initial.default_instance_url ?? 'https://ymir.njordium.io',
 		}
 	},

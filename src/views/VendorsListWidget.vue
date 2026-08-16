@@ -47,7 +47,11 @@
 		<template v-else>
 			<ul class="i360-rows">
 				<li v-for="v in items" :key="v.id" class="i360-row">
-					<a class="i360-row__link" :href="link('/vendors/' + v.id)" target="_blank" rel="noopener">
+					<a
+						class="i360-row__link"
+						:href="link('/vendors/' + v.id)"
+						target="_blank"
+						rel="noopener">
 						<span class="i360-badge" :class="'i360-badge--' + badgeVariant(v.status)">
 							<component :is="badgeIcon(v.status)" :size="16" />
 						</span>
@@ -85,6 +89,7 @@ import { generateUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
 import ArchiveOutlineIcon from 'vue-material-design-icons/ArchiveOutline.vue'
 import CheckCircleIcon from 'vue-material-design-icons/CheckCircle.vue'
@@ -94,6 +99,7 @@ import CogIcon from 'vue-material-design-icons/Cog.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
+import PlaylistCheckIcon from 'vue-material-design-icons/PlaylistCheck.vue'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import WidgetSettingsModal from '../components/WidgetSettingsModal.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
@@ -151,8 +157,8 @@ export default {
 
 	computed: {
 		statusFilter() {
-			if (this.variant === 'approved') return 'approved'
-			if (this.variant === 'inprogress') return 'draft'  // ymir has no combined filter — link to drafts as a reasonable landing
+			if (this.variant === 'approved') { return 'approved' }
+			if (this.variant === 'inprogress') { return 'draft' } // ymir has no combined filter — link to drafts as a reasonable landing
 			return ''
 		},
 
@@ -167,8 +173,8 @@ export default {
 		},
 
 		emptyIcon() {
-			if (this.variant === 'inprogress') return PlaylistCheckIcon
-			if (this.variant === 'added') return AccountPlusIcon
+			if (this.variant === 'inprogress') { return PlaylistCheckIcon }
+			if (this.variant === 'added') { return AccountPlusIcon }
 			return CheckCircleOutlineIcon
 		},
 	},
@@ -222,18 +228,18 @@ export default {
 		},
 
 		badgeVariant(status) {
-			if (status === 'approved') return 'approved'
-			if (status === 'under_review') return 'review'
-			if (status === 'draft') return 'draft'
-			if (status === 'archived') return 'archived'
+			if (status === 'approved') { return 'approved' }
+			if (status === 'under_review') { return 'review' }
+			if (status === 'draft') { return 'draft' }
+			if (status === 'archived') { return 'archived' }
 			return 'draft'
 		},
 
 		badgeIcon(status) {
-			if (status === 'approved') return CheckCircleIcon
-			if (status === 'under_review') return ClockOutlineIcon
-			if (status === 'draft') return PencilOutlineIcon
-			if (status === 'archived') return ArchiveOutlineIcon
+			if (status === 'approved') { return CheckCircleIcon }
+			if (status === 'under_review') { return ClockOutlineIcon }
+			if (status === 'draft') { return PencilOutlineIcon }
+			if (status === 'archived') { return ArchiveOutlineIcon }
 			return PencilOutlineIcon
 		},
 
@@ -254,17 +260,17 @@ export default {
 		},
 
 		relativeTime(iso) {
-			if (!iso) return ''
+			if (!iso) { return '' }
 			const then = new Date(iso).getTime()
-			if (!then) return ''
+			if (!then) { return '' }
 			const diff = Math.max(0, Date.now() - then)
 			const min = Math.floor(diff / 60000)
-			if (min < 1) return t('integration_inspect360', 'just now')
-			if (min < 60) return t('integration_inspect360', '{n} min ago', { n: min })
+			if (min < 1) { return t('integration_inspect360', 'just now') }
+			if (min < 60) { return t('integration_inspect360', '{n} min ago', { n: min }) }
 			const h = Math.floor(min / 60)
-			if (h < 24) return t('integration_inspect360', '{n}h ago', { n: h })
+			if (h < 24) { return t('integration_inspect360', '{n}h ago', { n: h }) }
 			const d = Math.floor(h / 24)
-			if (d < 7) return t('integration_inspect360', '{n}d ago', { n: d })
+			if (d < 7) { return t('integration_inspect360', '{n}d ago', { n: d }) }
 			return new Date(iso).toLocaleDateString()
 		},
 
@@ -288,9 +294,8 @@ export default {
 					this.maxItems = payload.maxItems
 				}
 				this.showSettings = false
-				this.fetch()  // re-fetch to pick up the new max_items cap
-			} catch { /* silent — user can retry from within the still-open modal */ }
-			finally {
+				this.fetch() // re-fetch to pick up the new max_items cap
+			} catch { /* silent — user can retry from within the still-open modal */ } finally {
 				this.savingSettings = false
 			}
 		},

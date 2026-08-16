@@ -98,6 +98,7 @@ export default {
 				total_services: 0,
 				total_assessments: 0,
 			},
+
 			instanceUrl: '',
 			refreshIntervalSeconds: 300,
 			showSettings: false,
@@ -109,14 +110,14 @@ export default {
 	computed: {
 		tileConfig() {
 			return [
-				{ key: 'approved_vendors', label: t('integration_inspect360', 'Approved vendors'),  href: '/vendors?status=approved' },
-				{ key: 'drafts',           label: t('integration_inspect360', 'Draft vendors'),     href: '/vendors?status=draft' },
-				{ key: 'pending_review',   label: t('integration_inspect360', 'Under review'),      href: '/vendors?status=under_review' },
-				{ key: 'archived',         label: t('integration_inspect360', 'Archived'),          href: '/vendors?status=archived' },
-				{ key: 'active_vendors',   label: t('integration_inspect360', 'Active vendors'),    href: '/vendors' },
-				{ key: 'total_vendors',    label: t('integration_inspect360', 'Total vendors'),     href: '/vendors' },
-				{ key: 'total_services',   label: t('integration_inspect360', 'Total services'),    href: '/services' },
-				{ key: 'total_assessments',label: t('integration_inspect360', 'Total assessments'), href: '/assessments' },
+				{ key: 'approved_vendors', label: t('integration_inspect360', 'Approved vendors'), href: '/vendors?status=approved' },
+				{ key: 'drafts', label: t('integration_inspect360', 'Draft vendors'), href: '/vendors?status=draft' },
+				{ key: 'pending_review', label: t('integration_inspect360', 'Under review'), href: '/vendors?status=under_review' },
+				{ key: 'archived', label: t('integration_inspect360', 'Archived'), href: '/vendors?status=archived' },
+				{ key: 'active_vendors', label: t('integration_inspect360', 'Active vendors'), href: '/vendors' },
+				{ key: 'total_vendors', label: t('integration_inspect360', 'Total vendors'), href: '/vendors' },
+				{ key: 'total_services', label: t('integration_inspect360', 'Total services'), href: '/services' },
+				{ key: 'total_assessments', label: t('integration_inspect360', 'Total assessments'), href: '/assessments' },
 			]
 		},
 	},
@@ -177,8 +178,7 @@ export default {
 				this.refreshIntervalSeconds = payload.refreshSeconds
 				this.autoRefresh?.setIntervalMs(payload.refreshSeconds * 1000)
 				this.showSettings = false
-			} catch { /* silent */ }
-			finally {
+			} catch { /* silent */ } finally {
 				this.savingSettings = false
 			}
 		},
