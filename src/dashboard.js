@@ -20,6 +20,11 @@ const WIDGETS = [
 		props: { endpoint: 'vendors/approved', widgetKey: 'inspect360_approved_vendors', variant: 'approved' },
 	},
 	{
+		id: 'inspect360_in_progress',
+		component: VendorsListWidget,
+		props: { endpoint: 'vendors/in-progress', widgetKey: 'inspect360_in_progress', variant: 'inprogress' },
+	},
+	{
 		id: 'inspect360_added_vendors',
 		component: VendorsListWidget,
 		props: { endpoint: 'vendors/added', widgetKey: 'inspect360_added_vendors', variant: 'added' },

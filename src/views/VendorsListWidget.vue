@@ -40,7 +40,7 @@
 		</div>
 
 		<div v-else-if="!items.length" class="i360-status">
-			<CheckCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<component :is="emptyIcon" :size="40" class="i360-status__icon" />
 			<span>{{ emptyMessage }}</span>
 		</div>
 
@@ -112,6 +112,7 @@ export default {
 		NcActions,
 		NcLoadingIcon,
 		WidgetSettingsModal,
+		AccountPlusIcon,
 		AlertCircleOutlineIcon,
 		ArchiveOutlineIcon,
 		CheckCircleIcon,
@@ -121,6 +122,7 @@ export default {
 		LinkOffIcon,
 		OpenInNewIcon,
 		PencilOutlineIcon,
+		PlaylistCheckIcon,
 		RefreshIcon,
 	},
 
@@ -149,13 +151,25 @@ export default {
 
 	computed: {
 		statusFilter() {
-			return this.variant === 'approved' ? 'approved' : ''
+			if (this.variant === 'approved') return 'approved'
+			if (this.variant === 'inprogress') return 'draft'  // ymir has no combined filter — link to drafts as a reasonable landing
+			return ''
 		},
 
 		emptyMessage() {
-			return this.variant === 'added'
-				? t('integration_inspect360', 'No vendors added yet.')
-				: t('integration_inspect360', 'No approved vendors — new approvals will appear here.')
+			if (this.variant === 'added') {
+				return t('integration_inspect360', 'No vendors added yet.')
+			}
+			if (this.variant === 'inprogress') {
+				return t('integration_inspect360', 'No vendors in progress — the queue is clear.')
+			}
+			return t('integration_inspect360', 'No approved vendors — new approvals will appear here.')
+		},
+
+		emptyIcon() {
+			if (this.variant === 'inprogress') return PlaylistCheckIcon
+			if (this.variant === 'added') return AccountPlusIcon
+			return CheckCircleOutlineIcon
 		},
 	},
 
@@ -224,9 +238,18 @@ export default {
 		},
 
 		rowTime(v) {
-			// Prefer approved_at when available (most meaningful for the
-			// Approved widget), fall back to created_at.
-			const iso = v.approved_at || v.created_at
+			// Per-variant time preference:
+			//   approved → approved_at (when the transition happened)
+			//   inprogress → updated_at (last time the item moved)
+			//   added → created_at (when the vendor was first added)
+			let iso
+			if (this.variant === 'approved') {
+				iso = v.approved_at || v.created_at
+			} else if (this.variant === 'inprogress') {
+				iso = v.updated_at || v.created_at
+			} else {
+				iso = v.created_at
+			}
 			return this.relativeTime(iso)
 		},
 

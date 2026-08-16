@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-16
+
+### Added
+
+- **New "I360: In Progress" widget** — Vendor Manager's workload view. Combined list of suppliers in `status=draft` OR `status=under_review`, sorted newest-first by `updated_at`. The Inspect360 API does not support multi-status filtering in one call (`?status=draft,under_review` returns 0 rows) or server-side sort (`?sort=` is silently dropped), so this endpoint fires two upstream calls and merges + sorts server-side. Colour badges auto-differentiate draft rows (grey pencil) from under-review rows (orange clock) in the same list. Registered at `getOrder=12`, between Approved and Added.
+- **Overview widget redesigned to match `integration_forgejo_gitea` KPI layout** — 2×4 grid of eight tiles (previously 4 tiles with coloured icon squares). No per-tile icons; each tile is a bordered card with a large orange number and a small greyed label below, matching the Forgejo Overview visual weight exactly. Tiles are: Approved / Drafts / Under Review / Archived / Active Vendors / Total Vendors / Total Services / Total Assessments. Each links to the corresponding page on ymir.
+- **New backend endpoints**: `GET /vendors/in-progress` and expanded `GET /overview` (adds `archived`, `active_vendors`, `total_assessments` to the tiles payload). Total-assessments is a rough count from `/api/v1/assessments?limit=500` (fine for KPI, undercounts if the instance has >500 assessments).
+
+### Notes
+
+- **Probed and confirmed** (Vendor Manager role on ymir demo): Inspect360's `/api/v1/suppliers` silently ignores unknown query params. `?created_by=<uuid>` returns the full unfiltered list, so a "My Vendors" widget (filtered by the current user's Inspect360 UUID) can't be built until Inspect360 adds a filter. Same for `?sort=` and `?order=` — our carryover "Added Vendors" widget's `sort=created_at&order=desc` params are being dropped; rows come in the API's default order.
+- The "In Progress" widget's `Show all` link points to `/vendors?status=draft` (ymir has no combined draft+under_review filter view; drafts is the more actionable landing for a Vendor Manager).
+
 ## [0.3.4] — 2026-08-16
 
 ### Changed

@@ -15,6 +15,7 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCA\Inspect360\Dashboard\AddedVendorsWidget;
 use OCA\Inspect360\Dashboard\ApprovedVendorsWidget;
 use OCA\Inspect360\Dashboard\AssessedWidget;
+use OCA\Inspect360\Dashboard\InProgressWidget;
 use OCA\Inspect360\Dashboard\OverviewWidget;
 
 class Application extends App implements IBootstrap {
@@ -28,6 +29,7 @@ class Application extends App implements IBootstrap {
 	public function register(IRegistrationContext $context): void {
 		$context->registerDashboardWidget(OverviewWidget::class);
 		$context->registerDashboardWidget(ApprovedVendorsWidget::class);
+		$context->registerDashboardWidget(InProgressWidget::class);
 		$context->registerDashboardWidget(AddedVendorsWidget::class);
 		$context->registerDashboardWidget(AssessedWidget::class);
 	}

@@ -41,6 +41,7 @@ class Inspect360APIController extends Controller {
 		'inspect360_overview',
 		'inspect360_approved_vendors',
 		'inspect360_added_vendors',
+		'inspect360_in_progress',
 		'inspect360_assessed',
 	];
 
@@ -73,12 +74,25 @@ class Inspect360APIController extends Controller {
 			return new DataResponse(['error' => 'upstream_unavailable'], Http::STATUS_BAD_GATEWAY);
 		}
 		$byStatus = $stats['by_status'] ?? [];
+		// Assessment count is a rough approximation — the /assessments
+		// endpoint returns a bare array; we request up to 500 and count.
+		// If the instance genuinely has >500 assessments this will
+		// undercount, but it's cheap and good enough for a KPI tile.
+		$assessments = $this->api->getAssessments($instanceUrl, $accessToken, $this->userId, ['limit' => 500]);
+		$assessmentsTotal = count($assessments);
+
+		$totalVendors = (int) ($stats['total'] ?? 0);
+		$archived = (int) ($byStatus['archived'] ?? 0);
 		return new DataResponse([
 			'tiles' => [
 				'approved_vendors' => (int) ($byStatus['approved'] ?? 0),
-				'total_vendors' => (int) ($stats['total'] ?? 0),
+				'drafts' => (int) ($byStatus['draft'] ?? 0),
 				'pending_review' => (int) ($byStatus['under_review'] ?? 0),
+				'archived' => $archived,
+				'active_vendors' => max(0, $totalVendors - $archived),
+				'total_vendors' => $totalVendors,
 				'total_services' => $productsTotal >= 0 ? $productsTotal : 0,
+				'total_assessments' => $assessmentsTotal,
 			],
 			'config' => [
 				'refresh_interval_seconds' => $this->readRefreshInterval('inspect360_overview'),
@@ -123,6 +137,54 @@ class Inspect360APIController extends Controller {
 			'page' => 1,
 			'sort' => 'created_at',
 			'order' => 'desc',
+		]);
+	}
+
+	/**
+	 * Vendors "in progress" — the Vendor Manager's workload view: all
+	 * suppliers currently in `draft` OR `under_review` status, sorted
+	 * newest-first by `updated_at`.
+	 *
+	 * The Inspect360 API doesn't support multi-status filtering in one
+	 * call (`?status=draft,under_review` returns 0 rows; `?status[]=…`
+	 * silently drops the filter). So this endpoint fires two upstream
+	 * calls in sequence, merges the results, and sorts client-side
+	 * (upstream `sort=updated_at` is also silently ignored). Total is
+	 * the sum of the two upstream totals.
+	 *
+	 * @NoAdminRequired
+	 */
+	public function getInProgressVendors(): DataResponse {
+		[$instanceUrl, $accessToken, $err] = $this->credentials();
+		if ($err !== null) {
+			return $err;
+		}
+		$widgetKey = 'inspect360_in_progress';
+		$maxItems = $this->readMaxItems($widgetKey);
+		$drafts = $this->api->getSuppliers($instanceUrl, $accessToken, $this->userId, [
+			'status' => 'draft',
+			'limit' => $maxItems,
+			'page' => 1,
+		]);
+		$review = $this->api->getSuppliers($instanceUrl, $accessToken, $this->userId, [
+			'status' => 'under_review',
+			'limit' => $maxItems,
+			'page' => 1,
+		]);
+		$merged = array_merge($drafts['items'], $review['items']);
+		usort($merged, static function ($a, $b) {
+			return strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+		});
+		$capped = array_slice($merged, 0, $maxItems);
+		$items = array_map([$this, 'projectVendor'], $capped);
+		return new DataResponse([
+			'items' => $items,
+			'total' => (int) ($drafts['total'] ?? 0) + (int) ($review['total'] ?? 0),
+			'config' => [
+				'refresh_interval_seconds' => $this->readRefreshInterval($widgetKey),
+				'max_items' => $maxItems,
+			],
+			'instance_url' => $instanceUrl,
 		]);
 	}
 

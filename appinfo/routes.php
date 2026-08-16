@@ -21,6 +21,7 @@ return [
 		['name' => 'inspect360API#getOverview', 'url' => '/overview', 'verb' => 'GET'],
 		['name' => 'inspect360API#getApprovedVendors', 'url' => '/vendors/approved', 'verb' => 'GET'],
 		['name' => 'inspect360API#getAddedVendors', 'url' => '/vendors/added', 'verb' => 'GET'],
+		['name' => 'inspect360API#getInProgressVendors', 'url' => '/vendors/in-progress', 'verb' => 'GET'],
 		['name' => 'inspect360API#getAssessed', 'url' => '/assessments/recent', 'verb' => 'GET'],
 		['name' => 'inspect360API#getInstanceInfo', 'url' => '/instance-info', 'verb' => 'GET'],
 		['name' => 'inspect360API#setWidgetPreferences', 'url' => '/widget/{widgetKey}/preferences', 'verb' => 'PUT'],
