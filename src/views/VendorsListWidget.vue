@@ -2,29 +2,27 @@
 	<div class="i360-widget i360-list">
 		<div class="i360-toolbar">
 			<NcActions :forceMenu="true">
+				<NcActionButton @click="openSettings">
+					<template #icon>
+						<CogIcon :size="20" />
+					</template>
+					{{ t('integration_inspect360', 'Widget settings') }}
+				</NcActionButton>
 				<NcActionButton @click="fetch">
 					<template #icon>
 						<RefreshIcon :size="20" />
 					</template>
 					{{ t('integration_inspect360', 'Refresh now') }}
 				</NcActionButton>
-				<NcActionButton @click="showSettings = !showSettings">
-					<template #icon>
-						<CogOutlineIcon :size="20" />
-					</template>
-					{{ showSettings
-						? t('integration_inspect360', 'Hide widget settings')
-						: t('integration_inspect360', 'Widget settings') }}
-				</NcActionButton>
 			</NcActions>
 		</div>
 
-		<div v-if="showSettings" class="i360-settings">
-			<label class="i360-settings__label">{{ t('integration_inspect360', 'Refresh interval') }}</label>
-			<RefreshIntervalPicker
-				:modelValue="refreshIntervalSeconds"
-				@update:modelValue="onRefreshChange" />
-		</div>
+		<WidgetSettingsModal
+			v-if="showSettings"
+			:refreshSeconds="refreshIntervalSeconds"
+			:saving="savingSettings"
+			@close="showSettings = false"
+			@save="onSaveSettings" />
 
 		<div v-if="loading && !loaded" class="i360-status">
 			<NcLoadingIcon :size="20" />
@@ -85,7 +83,8 @@
 				target="_blank"
 				rel="noopener"
 				class="i360-more">
-				{{ t('integration_inspect360', 'Show all ({total})', { total }) }}
+				<span>{{ t('integration_inspect360', 'Show all ({total})', { total }) }}</span>
+				<OpenInNewIcon :size="14" />
 			</a>
 		</template>
 	</div>
@@ -100,11 +99,12 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
-import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
+import CogIcon from 'vue-material-design-icons/Cog.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import ShieldCheckIcon from 'vue-material-design-icons/ShieldCheck.vue'
-import RefreshIntervalPicker from '../components/RefreshIntervalPicker.vue'
+import WidgetSettingsModal from '../components/WidgetSettingsModal.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
 
 const STATUS_LABELS = {
@@ -121,11 +121,12 @@ export default {
 		NcActions,
 		NcEmptyContent,
 		NcLoadingIcon,
-		RefreshIntervalPicker,
+		WidgetSettingsModal,
 		AccountPlusIcon,
 		AlertCircleOutlineIcon,
-		CogOutlineIcon,
+		CogIcon,
 		LinkOffIcon,
+		OpenInNewIcon,
 		RefreshIcon,
 		ShieldCheckIcon,
 	},
@@ -147,6 +148,7 @@ export default {
 			instanceUrl: '',
 			refreshIntervalSeconds: 300,
 			showSettings: false,
+			savingSettings: false,
 			autoRefresh: null,
 		}
 	},
@@ -179,6 +181,10 @@ export default {
 	},
 
 	methods: {
+		openSettings() {
+			this.showSettings = true
+		},
+
 		async fetch() {
 			this.loading = true
 			try {
@@ -217,15 +223,20 @@ export default {
 			return (this.instanceUrl || '') + path
 		},
 
-		async onRefreshChange(seconds) {
-			this.refreshIntervalSeconds = seconds
-			this.autoRefresh?.setIntervalMs(seconds * 1000)
+		async onSaveSettings(seconds) {
+			this.savingSettings = true
 			try {
 				await axios.put(
 					generateUrl('/apps/integration_inspect360/widget/' + this.widgetKey + '/refresh-interval'),
 					{ seconds },
 				)
-			} catch { /* silent */ }
+				this.refreshIntervalSeconds = seconds
+				this.autoRefresh?.setIntervalMs(seconds * 1000)
+				this.showSettings = false
+			} catch { /* silent — user can retry from within the still-open modal */ }
+			finally {
+				this.savingSettings = false
+			}
 		},
 	},
 }
@@ -250,20 +261,6 @@ export default {
 	margin-bottom: -4px;
 }
 
-.i360-settings {
-	padding: 6px 8px 10px;
-	border-bottom: 1px solid var(--color-border);
-
-	&__label {
-		display: block;
-		font-size: 11px;
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
-		color: var(--color-text-maxcontrast);
-		margin-bottom: 4px;
-	}
-}
-
 .i360-status {
 	display: flex;
 	align-items: center;
@@ -278,9 +275,8 @@ export default {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	max-height: 380px;
-	overflow-y: auto;
-	overflow-x: hidden;
+	// No max-height / internal scroll — v0.3.2 caps rows at 7 upstream, so
+	// the full list always fits and anything more goes via "Show all".
 }
 
 .i360-row {
@@ -374,14 +370,17 @@ export default {
 }
 
 .i360-more {
-	display: block;
-	padding: 6px 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 8px;
 	font-size: 12px;
 	color: var(--color-primary-element);
 	text-decoration: none;
 	border-top: 1px solid var(--color-border);
 	margin-top: 4px;
 
-	&:hover { text-decoration: underline; }
+	&:hover span { text-decoration: underline; }
 }
 </style>

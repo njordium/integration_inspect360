@@ -26,7 +26,11 @@ use OCA\Inspect360\Service\Inspect360AuthService;
  */
 class Inspect360APIController extends Controller {
 
-	private const MAX_ITEMS_PER_WIDGET = 30;
+	// Reduced from 30 to 7 in v0.3.2 — feedback from first live deploy was
+	// that 8+ rows crowded the dashboard column's bottom edge. 7 gives a
+	// short, scannable list with visual breathing room and pushes anything
+	// beyond to the "Show all" deep link.
+	private const MAX_ITEMS_PER_WIDGET = 7;
 	private const DEFAULT_REFRESH_SECONDS = 300;
 	private const ALLOWED_REFRESH_SECONDS = [0, 30, 60, 300, 900, 1800, 3600];
 	// Widget-key whitelist for setRefreshInterval (finding H-L5) — prevents

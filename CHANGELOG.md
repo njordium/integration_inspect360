@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-08-16
+
+### Changed
+
+- **Row cap reduced from 30 to 7** on the three list widgets (Approved / Added / Assessed). Feedback from live deploy was that ~8 visible rows crowded the dashboard column's bottom edge with no breathing room. 7 rows gives a short, scannable list; anything more goes via the "Show all" deep link into ymir.
+- **"Show all" link restyled** — now centered with an `OpenInNew` icon next to the label, matching the `integration_forgejo_gitea` pattern. Underline appears on hover of the text only, not the icon.
+- **"I360: Approved Vendors" widget title shortened to "I360: Approved"** so the full name fits without truncation in the dashboard title bar.
+- Removed the (now unnecessary) `max-height` / internal-scroll on list bodies — with only 7 rows the full list always fits.
+- **Widget settings now open in an `NcModal`**, matching the `integration_forgejo_gitea` pattern exactly. The previous inline-reveal-below-toolbar was replaced. New shared component `src/components/WidgetSettingsModal.vue` handles the modal shell (title, section, Cancel/Save actions with `ContentSave` icon + spinner). Draft-then-Save semantics: the picker mutates a local draft; user commits via **Save** (persists then closes) or reverts via **Cancel**.
+- **3-dot menu reordered**: `Widget settings` first (with filled `Cog` icon), `Refresh now` second — matching forgejo. Previous `CogOutline` icon replaced with filled `Cog`.
+
 ## [0.3.1] — 2026-08-16
 
 ### Changed — widget UX polish (feedback from first live deploy)
