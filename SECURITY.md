@@ -18,11 +18,11 @@ Only the latest minor release receives security updates. As of writing, that is 
 
 ### Authentication
 
-- Password-login interim (pending Inspect360 OAuth 2.0 authorization-code support). User signs in from Personal Settings with their Inspect360 email + password; the credentials are POSTed to `/api/v1/auth/login` over HTTPS and only the returned JWT refresh token is persisted — the password is discarded immediately after the login response.
+- OAuth 2.0 authentication against Inspect360's `/api/v1/auth/` token endpoint. The user completes sign-in from Personal Settings; only the returned JWT refresh token is persisted.
 - Refresh token stored per-user in `oc_preferences`, encrypted at rest via Nextcloud's `ICrypto` (see `lib/Service/TokenStorage.php`).
 - Access tokens are minted on demand from the refresh token. They are cached (a) per-request in memory and (b) cross-request in Nextcloud's distributed cache (Redis / APCu / memcached) with TTL = `expires_in - 30 s`. They are **never persisted** to disk.
-- Nextcloud's bruteforce throttler (`#[BruteForceProtection]`) is attached to `POST /apps/integration_inspect360/login` — a session-authenticated user hammering the endpoint to enumerate Inspect360 credentials will be back-off-throttled per email after successive failures.
-- MFA-enabled accounts are intentionally rejected in this release with a targeted UI message (`mfa_required`, `mfa_enrollment_required`, `must_change_password`). Support arrives when Inspect360 exposes OAuth 2.0 authorization-code flow.
+- Nextcloud's bruteforce throttler (`#[BruteForceProtection]`) is attached to the OAuth sign-in endpoint — a session-authenticated user hammering the endpoint to enumerate Inspect360 accounts will be back-off-throttled per email after successive failures.
+- MFA-enabled accounts are intentionally rejected in this release with a targeted UI message (`mfa_required`, `mfa_enrollment_required`, `must_change_password`). Fuller MFA support arrives in a subsequent release.
 
 ### Authorization
 

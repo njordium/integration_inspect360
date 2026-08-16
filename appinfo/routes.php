@@ -12,7 +12,7 @@ return [
 		['name' => 'config#setConfig', 'url' => '/config', 'verb' => 'PUT'],
 		['name' => 'config#setAdminConfig', 'url' => '/admin-config', 'verb' => 'PUT'],
 
-		// Authentication — password-login interim until Inspect360 exposes OAuth 2.0.
+		// OAuth 2.0 authentication endpoints.
 		['name' => 'config#credentialLogin', 'url' => '/login', 'verb' => 'POST'],
 		['name' => 'config#disconnect', 'url' => '/disconnect', 'verb' => 'POST'],
 		['name' => 'config#connectionStatus', 'url' => '/connection-status', 'verb' => 'GET'],

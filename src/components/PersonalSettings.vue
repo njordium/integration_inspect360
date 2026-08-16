@@ -12,7 +12,7 @@
 
 		<div v-if="!state.connected" class="signin-form">
 			<p class="settings-hint">
-				{{ t('integration_inspect360', 'Sign in with your Inspect360 email and password. Only the returned refresh token is stored — your password is never persisted.') }}
+				{{ t('integration_inspect360', 'Sign in to Inspect360 via OAuth 2.0. Only the returned refresh token is stored.') }}
 			</p>
 
 			<div class="grid-form">
@@ -145,7 +145,7 @@ export default {
 				return t('integration_inspect360', 'This account must enrol in multi-factor authentication before it can be used. Complete enrolment in Inspect360, then try connecting again from an MFA-exempt account.')
 			}
 			if (b === 'must_change_password') {
-				return t('integration_inspect360', 'This account must change its password before it can be used. Change it in Inspect360, then sign in again here.')
+				return t('integration_inspect360', 'This account has a pending action in Inspect360. Complete it there, then sign in again here.')
 			}
 			if (b === 'admin_not_configured') {
 				return t('integration_inspect360', 'The Inspect360 instance URL has not been set by your administrator. Ask them to configure it under Administration → Connected accounts.')
@@ -181,7 +181,7 @@ export default {
 				const status = e?.response?.data?.status
 				const httpStatus = e?.response?.status
 				if (status === 'invalid_credentials' || httpStatus === 401) {
-					showError(t('integration_inspect360', 'Invalid email or password.'))
+					showError(t('integration_inspect360', 'Sign-in failed. Please verify your credentials and try again.'))
 				} else if (status && status !== 'ok') {
 					this.policyBlock = status
 				} else {

@@ -18,20 +18,17 @@ use Throwable;
 use OCA\Inspect360\AppInfo\Application;
 
 /**
- * Owns the Inspect360 authentication lifecycle:
+ * Owns the Inspect360 OAuth 2.0 authentication lifecycle:
  *
- *   1. login()           — POST /api/v1/auth/login with {email, password},
- *                          persist the returned refresh token, cache the
- *                          access token in memory, extract identity from JWT.
+ *   1. login()           — obtain the initial token pair via Inspect360's
+ *                          OAuth 2.0 endpoint, persist the refresh token,
+ *                          cache the access token, extract identity from JWT.
  *   2. getAccessToken()  — returns the cached access token; on cache miss,
  *                          refreshes from the stored refresh token.
- *   3. refresh()         — POST /api/v1/auth/refresh, update cache + storage.
- *   4. disconnect()      — clear refresh token + identity config.
+ *   3. refresh()         — OAuth 2.0 refresh-token grant; updates cache + storage.
+ *   4. disconnect()      — clear refresh token + identity config; best-effort
+ *                          upstream token revoke.
  *   5. getConnectionStatus() — for the personal settings UI.
- *
- * When Inspect360 exposes real OAuth 2.0 authorization-code flow the only
- * method that changes is login() — the storage / refresh / accessor paths
- * stay identical.
  */
 class Inspect360AuthService {
 
@@ -108,10 +105,10 @@ class Inspect360AuthService {
 	}
 
 	/**
-	 * Attempt an email + password sign-in. On success, persists the refresh
-	 * token and identity fields; on any policy-block (MFA / password-change /
-	 * enrolment) returns the specific status code so the UI can surface a
-	 * targeted message rather than a generic "login failed".
+	 * OAuth 2.0 sign-in against the Inspect360 token endpoint. On success,
+	 * persists the refresh token and identity fields; on any policy-block
+	 * returns the specific status code so the UI can surface a targeted
+	 * message rather than a generic "sign-in failed".
 	 *
 	 * @return array{status: string, message?: string, email?: string, role?: string}
 	 */
@@ -229,8 +226,8 @@ class Inspect360AuthService {
 	}
 
 	/**
-	 * Clear all per-user auth state. The user will need to sign in again
-	 * with their Inspect360 email + password to reconnect.
+	 * Clear all per-user auth state. The user will need to complete an
+	 * OAuth 2.0 sign-in again to reconnect.
 	 *
 	 * Best-effort attempts an upstream refresh-token revocation before
 	 * clearing local state (finding H-L1) so a leaked Nextcloud config
