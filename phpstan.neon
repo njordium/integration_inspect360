@@ -14,6 +14,11 @@ parameters:
     # generic PHPDoc to every controller call-site is out of scope; the runtime
     # behaviour is correct — the JSON payloads shipped are plain arrays.
     - '#Parameter \#1 \$data of class OCP\\AppFramework\\Http\\DataResponse constructor expects T of#'
+    # Same story for parameter #2 $statusCode — Nextcloud added a strict
+    # literal-int union type. Http::STATUS_* constants are typed int, so
+    # every controller `new DataResponse($body, Http::STATUS_XXX)` call
+    # trips this even though the value at runtime is always a valid code.
+    - '#Parameter \#2 \$statusCode of class OCP\\AppFramework\\Http\\DataResponse constructor expects S of#'
     # PHPDoc-inferred types trigger these false positives on defensive fallbacks
     # that guard against real runtime shapes coming out of the external REST API.
     - '#Else branch is unreachable because ternary operator condition is always true#'

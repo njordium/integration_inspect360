@@ -216,7 +216,11 @@ class Inspect360APIController extends Controller {
 		$items = array_map([$this, 'projectVendor'], $capped);
 		return new DataResponse([
 			'items' => $items,
-			'total' => (int) ($drafts['total'] ?? 0) + (int) ($review['total'] ?? 0),
+			// $drafts['total'] and $review['total'] are always populated
+			// by Inspect360APIService::getSuppliers (which returns
+			// `{items, total: int}` unconditionally, defaulting to 0 on
+			// upstream failure) — so no ?? fallback needed here.
+			'total' => (int) $drafts['total'] + (int) $review['total'],
 			'config' => [
 				'refresh_interval_seconds' => $this->readRefreshInterval($widgetKey),
 				'max_items' => $maxItems,

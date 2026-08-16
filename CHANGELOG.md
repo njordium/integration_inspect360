@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-08-16
+
+### Fixed — remaining CI failures after v0.4.3
+
+- **PHPUnit** — the v0.4.3 smoke test's `testAppClassInstantiates` tried to `new Application()`, but `OCP\AppFramework\App`'s constructor needs a full Nextcloud runtime (`OC::$server`) that isn't available in a standalone PHPUnit run against the `nextcloud/ocp` dev-dep stubs. Simplified to two pure-constant assertions on `Application::APP_ID`.
+- **PHPStan** — two false-positive strict-type warnings added to the ignoreErrors list:
+  - `Parameter #2 $statusCode of DataResponse constructor expects S of 100|101|...|511, int given` — the OCP stub now uses a literal-int union for `$statusCode`; `Http::STATUS_*` constants are typed as bare `int`, so every controller call trips this even though the value is always a valid HTTP code. Matches the identical ignore already present for parameter #1 (`$data`).
+- **PHPStan / Insecure-Design leftover** — dropped a dead `?? 0` fallback in `Inspect360APIController::getInProgressVendors()` where PHPStan correctly pointed out that `$drafts['total']` is always populated by `Inspect360APIService::getSuppliers()` (documented return type).
+
 ## [0.4.3] — 2026-08-16
 
 ### Fixed — CI pipeline (was red since v0.3.3)
