@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-08-16
+
+### Fixed — CI pipeline (was red since v0.3.3)
+
+- **JS lint job**: bumped `actions/setup-node` to **Node 22**. `@nextcloud/eslint-config` v9 imports `findPackageJSON` from `node:module`, which was added in Node 22.7 — Node 20 threw `SyntaxError: The requested module 'node:module' does not provide an export named 'findPackageJSON'` at eslint load.
+- **PHPUnit matrix + PHPStan job**: pinned to **PHP 8.3 only** (was matrix `['8.1', '8.2', '8.3']`). `composer.json` requires `"php": "^8.3"` and `appinfo/info.xml` declares `<php min-version="8.3"/>`, so matrix-testing 8.1/8.2 was guaranteed to fail on `composer install` with `Your requirements could not be resolved to an installable set of packages`.
+- **PHPUnit**: added a minimal smoke test at `tests/php/ApplicationTest.php` — verifies PSR-4 autoload resolves the app namespace and `Application::APP_ID` matches the expected value. Previous runs failed with `failOnWarning="true"` + zero tests → PHPUnit's "no tests executed" warning fatalised the job.
+
+### Changed
+
+- `package.json` `engines` updated: `node ">=22.0.0"`, `npm ">=10.0.0"` (was `^20.0.0` / `^10.0.0`). Advisory only — Nextcloud users don't run Node; only affects developers building from source.
+
 ## [0.4.2] — 2026-08-16
 
 ### Added

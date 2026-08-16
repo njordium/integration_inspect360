@@ -1,6 +1,6 @@
 {
 	"name": "integration_inspect360",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Inspect360 integration for Nextcloud",
 	"main": "index.js",
 	"directories": {
@@ -36,8 +36,8 @@
 		"extends @nextcloud/browserslist-config"
 	],
 	"engines": {
-		"node": "^20.0.0",
-		"npm": "^10.0.0"
+		"node": ">=22.0.0",
+		"npm": ">=10.0.0"
 	},
 	"dependencies": {
 		"@nextcloud/auth": "^2.6.0",
