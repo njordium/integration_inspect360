@@ -3,11 +3,15 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>integration_inspect360</id>
 	<name>Inspect360 integration</name>
-	<summary>Nextcloud integration for Njordium Inspect360.</summary>
+	<summary>Nextcloud integration for Njordium Inspect360 — sign in with your Inspect360 email and password to bring TPRM data into your Nextcloud dashboard.</summary>
 	<description><![CDATA[Nextcloud integration app for Njordium Inspect360.
 
-This is a v0.0.1 scaffold. Structure, build tooling, dashboard and settings framework are in place; Inspect360-specific controllers, services and widget content are still to be wired. See the repository README for the current status.]]></description>
-	<version>0.0.1</version>
+Sign in with your Inspect360 email and password from Personal Settings → Connected accounts. The app exchanges your credentials for a JWT refresh token (stored encrypted via Nextcloud's ICrypto), discards the password, and uses short-lived access tokens minted on demand for every API call.
+
+Only Inspect360 accounts without multi-factor authentication are supported in this release — accounts with MFA enforced, password-change-required, or MFA-enrolment-required will see a targeted "not supported yet" message and can wait for a future release with OAuth 2.0 authorization-code flow.
+
+The dashboard widget layer is still on the carryover shape from the fork base; Inspect360-specific widgets (Overview, Approved Vendors, Added Vendors, Assessed) are being built in the next release.]]></description>
+	<version>0.1.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author homepage="https://njordium.com">Kim Haverblad</author>
 	<namespace>Inspect360</namespace>

@@ -6,27 +6,24 @@ namespace OCA\Inspect360\Settings;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\IConfig;
-use OCP\IURLGenerator;
 use OCP\Settings\ISettings;
 
 use OCA\Inspect360\AppInfo\Application;
 
 class Admin implements ISettings {
 
+	private const DEFAULT_INSTANCE_URL = 'https://ymir.njordium.io';
+
 	public function __construct(
 		private IConfig $config,
 		private IInitialState $initialStateService,
-		private IURLGenerator $urlGenerator,
 	) {
 	}
 
 	public function getForm(): TemplateResponse {
 		$this->initialStateService->provideInitialState('admin-config', [
-			'oauth_instance_url' => $this->config->getAppValue(Application::APP_ID, 'oauth_instance_url'),
-			'client_id' => $this->config->getAppValue(Application::APP_ID, 'client_id'),
-			'client_secret' => $this->config->getAppValue(Application::APP_ID, 'client_secret'),
-			'instance_type_default' => $this->config->getAppValue(Application::APP_ID, 'instance_type_default', 'forgejo'),
-			'redirect_uri' => $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.config.oauthRedirect'),
+			'instance_url' => $this->config->getAppValue(Application::APP_ID, 'instance_url', self::DEFAULT_INSTANCE_URL),
+			'default_instance_url' => self::DEFAULT_INSTANCE_URL,
 		]);
 		return new TemplateResponse(Application::APP_ID, 'adminSettings');
 	}

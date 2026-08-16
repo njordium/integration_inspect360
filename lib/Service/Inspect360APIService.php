@@ -10,32 +10,41 @@ namespace OCA\Inspect360\Service;
 
 use Exception;
 use OCP\Http\Client\IClientService;
-use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
-use OCA\Inspect360\AppInfo\Application;
-
 /**
- * Thin HTTP wrapper for Forgejo & Gitea REST v1. Both expose identical
- * OAuth 2 authorization-code + refresh-token grants at /login/oauth/access_token
- * and identical API v1 endpoints under /api/v1/.
+ * Thin HTTP wrapper for the Inspect360 REST v1 API — Bearer-authenticated
+ * calls under `{instance_url}/api/v1/`. Token acquisition and refresh are
+ * owned by {@see Inspect360AuthService}; this class only knows how to make
+ * an HTTP request and retry it once after a forced token refresh on 401.
+ *
+ * Business-logic methods below (getRepoIssues, getUserRepos, …) are
+ * carryover from the integration_forgejo_gitea fork base and still target
+ * the Forgejo/Gitea endpoint shape. They will be replaced with
+ * Inspect360-specific methods (vendors, services, assessments, …) in the
+ * Phase B widget release; kept in the interim as reference material and so
+ * the carryover widgets have something to call while auth is being wired.
  */
 class Inspect360APIService {
 
+	private const HTTP_TIMEOUT = 30;
+	private const USER_AGENT = 'Nextcloud Inspect360 integration';
+
 	public function __construct(
-		private IConfig $config,
 		private IClientService $clientService,
 		private LoggerInterface $logger,
-		private TokenStorage $tokens,
+		private Inspect360AuthService $auth,
 	) {
 	}
 
 	/**
 	 * Bearer-authenticated call to the instance's /api/v1/ tree.
-	 * On 401 attempts a single refresh_token exchange and retries.
+	 * On 401 forces one token refresh via {@see Inspect360AuthService} and
+	 * retries the request once. A second 401 is treated as a genuine
+	 * "credentials revoked" outcome and returned as an error.
 	 *
-	 * @return array Decoded JSON or ['error' => string]
+	 * @return array Decoded JSON response, or ['error' => string] on failure.
 	 */
 	public function request(
 		string $instanceUrl,
@@ -45,17 +54,32 @@ class Inspect360APIService {
 		array $params = [],
 		string $method = 'GET',
 	): array {
+		return $this->doRequest($instanceUrl, $accessToken, $userId, $endpoint, $params, $method, false);
+	}
+
+	/**
+	 * @return array Decoded JSON body, or ['error' => string].
+	 */
+	private function doRequest(
+		string $instanceUrl,
+		string $accessToken,
+		string $userId,
+		string $endpoint,
+		array $params,
+		string $method,
+		bool $isRetry,
+	): array {
 		try {
 			$url = rtrim($instanceUrl, '/') . '/api/v1/' . ltrim($endpoint, '/');
 			$options = [
 				'headers' => [
 					'Authorization' => 'Bearer ' . $accessToken,
 					'Accept' => 'application/json',
-					'User-Agent' => 'Nextcloud Forgejo/Gitea integration',
+					'User-Agent' => self::USER_AGENT,
 				],
-				'timeout' => 30,
-				// Handle 4xx/5xx ourselves rather than have Guzzle throw — otherwise
-				// the 401 → refresh path below is dead.
+				'timeout' => self::HTTP_TIMEOUT,
+				// Handle 4xx/5xx ourselves rather than let Guzzle throw —
+				// otherwise the 401 → refresh path below is dead.
 				'http_errors' => false,
 			];
 
@@ -65,6 +89,7 @@ class Inspect360APIService {
 				}
 			} else {
 				$options['json'] = $params;
+				$options['headers']['Content-Type'] = 'application/json';
 			}
 
 			$client = $this->clientService->newClient();
@@ -80,12 +105,20 @@ class Inspect360APIService {
 			$status = $response->getStatusCode();
 			$body = (string) $response->getBody();
 
-			if ($status === 401 && $userId !== '') {
-				return $this->retryAfterRefresh($instanceUrl, $userId, $endpoint, $params, $method);
+			if ($status === 401 && $userId !== '' && !$isRetry) {
+				$fresh = $this->auth->forceRefresh($userId);
+				if ($fresh === '') {
+					return ['error' => 'unauthorized'];
+				}
+				return $this->doRequest($instanceUrl, $fresh, $userId, $endpoint, $params, $method, true);
+			}
+
+			if ($status === 429) {
+				return ['error' => 'rate_limited'];
 			}
 
 			if ($status >= 400) {
-				$this->logger->info('Forgejo/Gitea request returned non-2xx', [
+				$this->logger->info('Inspect360 request returned non-2xx', [
 					'endpoint' => $endpoint,
 					'method' => $method,
 					'status' => $status,
@@ -99,7 +132,7 @@ class Inspect360APIService {
 			// Log a redacted summary — never the exception object, which
 			// Nextcloud's logger otherwise records with full request context
 			// (including the Authorization: Bearer header).
-			$this->logger->warning('Forgejo/Gitea request failed', [
+			$this->logger->warning('Inspect360 request failed', [
 				'endpoint' => $endpoint,
 				'method' => $method,
 				'reason' => $this->redactSecrets($e->getMessage(), $accessToken),
@@ -108,62 +141,65 @@ class Inspect360APIService {
 		}
 	}
 
-	private function retryAfterRefresh(
+	/**
+	 * Total count for a paginated /api/v1/ endpoint, read from the
+	 * X-Total-Count response header rather than counting rows in the
+	 * body — so we return the real total even when it exceeds the
+	 * page size. Uses limit=1 to keep the transfer tiny; only the
+	 * header matters for the count.
+	 *
+	 * Returns -1 on error so the caller can distinguish "0 real
+	 * matches" from "the request failed."
+	 */
+	public function countByHeader(
 		string $instanceUrl,
+		string $accessToken,
+		string $userId,
+		string $endpoint,
+		array $params = [],
+	): int {
+		return $this->doCountByHeader($instanceUrl, $accessToken, $userId, $endpoint, $params, false);
+	}
+
+	private function doCountByHeader(
+		string $instanceUrl,
+		string $accessToken,
 		string $userId,
 		string $endpoint,
 		array $params,
-		string $method,
-	): array {
-		$refreshToken = $this->tokens->getRefreshToken($userId);
-		if ($refreshToken === '') {
-			return ['error' => 'unauthorized'];
-		}
-		$clientId = $this->config->getAppValue(Application::APP_ID, 'client_id');
-		$clientSecret = $this->config->getAppValue(Application::APP_ID, 'client_secret');
-		$result = $this->requestOAuthAccessToken($instanceUrl, [
-			'grant_type' => 'refresh_token',
-			'refresh_token' => $refreshToken,
-			'client_id' => $clientId,
-			'client_secret' => $clientSecret,
-		]);
-		if (!isset($result['access_token'])) {
-			return ['error' => 'refresh_failed'];
-		}
-		$this->tokens->setAccessToken($userId, $result['access_token']);
-		if (isset($result['refresh_token'])) {
-			$this->tokens->setRefreshToken($userId, $result['refresh_token']);
-		}
-		return $this->request($instanceUrl, $result['access_token'], '', $endpoint, $params, $method);
-	}
-
-	/**
-	 * POST to {instanceUrl}/login/oauth/access_token — used for both
-	 * authorization_code and refresh_token grants.
-	 */
-	public function requestOAuthAccessToken(string $instanceUrl, array $params): array {
+		bool $isRetry,
+	): int {
 		try {
-			$url = rtrim($instanceUrl, '/') . '/login/oauth/access_token';
-			$client = $this->clientService->newClient();
-			$response = $client->post($url, [
-				'body' => $params,
+			$params['limit'] = 1;
+			$params['page'] = 1;
+			$url = rtrim($instanceUrl, '/') . '/api/v1/' . ltrim($endpoint, '/') . '?' . http_build_query($params);
+			$response = $this->clientService->newClient()->get($url, [
 				'headers' => [
+					'Authorization' => 'Bearer ' . $accessToken,
 					'Accept' => 'application/json',
-					'User-Agent' => 'Nextcloud Forgejo/Gitea integration',
+					'User-Agent' => self::USER_AGENT,
 				],
-				'timeout' => 30,
+				'timeout' => self::HTTP_TIMEOUT,
 				'http_errors' => false,
 			]);
-			$body = (string) $response->getBody();
-			$decoded = json_decode($body, true);
-			return is_array($decoded) ? $decoded : ['error' => 'invalid_response'];
+			$status = $response->getStatusCode();
+			if ($status === 401 && $userId !== '' && !$isRetry) {
+				$fresh = $this->auth->forceRefresh($userId);
+				if ($fresh === '') {
+					return -1;
+				}
+				return $this->doCountByHeader($instanceUrl, $fresh, $userId, $endpoint, $params, true);
+			}
+			if ($status >= 400) {
+				return -1;
+			}
+			return (int) $response->getHeader('X-Total-Count');
 		} catch (Throwable $e) {
-			$secret = (string) ($params['client_secret'] ?? '');
-			$refreshToken = (string) ($params['refresh_token'] ?? '');
-			$this->logger->warning('OAuth token exchange failed', [
-				'reason' => $this->redactSecrets($e->getMessage(), $secret, $refreshToken),
+			$this->logger->warning('Inspect360 countByHeader failed', [
+				'endpoint' => $endpoint,
+				'reason' => $this->redactSecrets($e->getMessage(), $accessToken),
 			]);
-			return ['error' => 'token_exchange_failed'];
+			return -1;
 		}
 	}
 
@@ -180,19 +216,18 @@ class Inspect360APIService {
 		return $subject;
 	}
 
-	/**
-	 * Fetches the currently authenticated user via /api/v1/user.
-	 */
+	// ---------------------------------------------------------------------
+	// Carryover business-logic methods (Forgejo/Gitea endpoint shape).
+	// These will be replaced with Inspect360 vendor/service/assessment
+	// methods in the Phase B widget release. Kept here so the carryover
+	// widget PHP + Vue continue to compile and run against a rejecting
+	// endpoint (404) while Phase A auth is being validated.
+	// ---------------------------------------------------------------------
+
 	public function getUser(string $instanceUrl, string $accessToken): array {
 		return $this->request($instanceUrl, $accessToken, '', 'user');
 	}
 
-	/**
-	 * All repositories the authenticated user can access — paginated,
-	 * bounded to a sane cap so we don't loop forever on huge accounts.
-	 *
-	 * @return list<array<string, mixed>>
-	 */
 	public function getUserRepos(string $instanceUrl, string $accessToken, string $userId, int $maxPages = 5): array {
 		$out = [];
 		for ($page = 1; $page <= $maxPages; $page++) {
@@ -215,11 +250,6 @@ class Inspect360APIService {
 		return $out;
 	}
 
-	/**
-	 * Issues (or pulls, controlled by type param) for a single repo.
-	 * Params passed through verbatim: state, type, assigned_by, created_by,
-	 * mentioned_by, limit, page…
-	 */
 	public function getRepoIssues(
 		string $instanceUrl,
 		string $accessToken,
@@ -230,16 +260,9 @@ class Inspect360APIService {
 	): array {
 		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/issues';
 		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		if (isset($result['error'])) {
-			return [];
-		}
-		return is_array($result) ? $result : [];
+		return isset($result['error']) ? [] : (is_array($result) ? $result : []);
 	}
 
-	/**
-	 * Cross-repo issue/pull search — one call, uses server-side scoping.
-	 * Used for stats aggregation across all accessible repos.
-	 */
 	public function searchAllIssues(
 		string $instanceUrl,
 		string $accessToken,
@@ -247,91 +270,18 @@ class Inspect360APIService {
 		array $params = [],
 	): array {
 		$result = $this->request($instanceUrl, $accessToken, $userId, 'repos/issues/search', $params);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Total count for a /repos/issues/search query, read from the
-	 * X-Total-Count response header rather than counting rows in the
-	 * body — so we return the real total even when it exceeds the
-	 * page size. Uses limit=1 to keep the transfer tiny; only the
-	 * header matters for the count.
-	 *
-	 * Returns -1 on error so the caller can distinguish "0 real
-	 * matches" from "the request failed."
-	 */
 	public function countIssueSearch(
 		string $instanceUrl,
 		string $accessToken,
 		string $userId,
 		array $params = [],
 	): int {
-		try {
-			$params['limit'] = 1;
-			$params['page'] = 1;
-			$url = rtrim($instanceUrl, '/') . '/api/v1/repos/issues/search?' . http_build_query($params);
-			$response = $this->clientService->newClient()->get($url, [
-				'headers' => [
-					'Authorization' => 'Bearer ' . $accessToken,
-					'Accept' => 'application/json',
-					'User-Agent' => 'Nextcloud Forgejo/Gitea integration',
-				],
-				'timeout' => 30,
-				'http_errors' => false,
-			]);
-			$status = $response->getStatusCode();
-			if ($status === 401 && $userId !== '') {
-				if ($this->tryRefresh($userId, $instanceUrl)) {
-					return $this->countIssueSearch($instanceUrl, $this->tokens->getAccessToken($userId), $userId, $params);
-				}
-				return -1;
-			}
-			if ($status >= 400) {
-				return -1;
-			}
-			return (int) $response->getHeader('X-Total-Count');
-		} catch (Throwable $e) {
-			$this->logger->warning('Forgejo/Gitea countIssueSearch failed', [
-				'reason' => $this->redactSecrets($e->getMessage(), $accessToken),
-			]);
-			return -1;
-		}
+		return $this->countByHeader($instanceUrl, $accessToken, $userId, 'repos/issues/search', $params);
 	}
 
-	/**
-	 * Refresh the access token in place; returns true on success.
-	 * Extracted from retryAfterRefresh() so the count path can share it.
-	 */
-	private function tryRefresh(string $userId, string $instanceUrl): bool {
-		$refreshToken = $this->tokens->getRefreshToken($userId);
-		if ($refreshToken === '') {
-			return false;
-		}
-		$clientId = $this->config->getAppValue(Application::APP_ID, 'client_id');
-		$clientSecret = $this->config->getAppValue(Application::APP_ID, 'client_secret');
-		$result = $this->requestOAuthAccessToken($instanceUrl, [
-			'grant_type' => 'refresh_token',
-			'refresh_token' => $refreshToken,
-			'client_id' => $clientId,
-			'client_secret' => $clientSecret,
-		]);
-		if (!isset($result['access_token'])) {
-			return false;
-		}
-		$this->tokens->setAccessToken($userId, (string) $result['access_token']);
-		if (isset($result['refresh_token'])) {
-			$this->tokens->setRefreshToken($userId, (string) $result['refresh_token']);
-		}
-		return true;
-	}
-
-	/**
-	 * Contribution heatmap for the given user. Returns
-	 * [{ timestamp: <unix>, contributions: N }, …].
-	 */
 	public function getHeatmap(
 		string $instanceUrl,
 		string $accessToken,
@@ -347,16 +297,9 @@ class Inspect360APIService {
 			$userId,
 			'users/' . rawurlencode($username) . '/heatmap',
 		);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Notifications for the connected user. Params: status-types (unread|read|pinned),
-	 * subject-type (Issue|Pull|Commit|Repository), page, limit.
-	 */
 	public function getNotifications(
 		string $instanceUrl,
 		string $accessToken,
@@ -364,15 +307,9 @@ class Inspect360APIService {
 		array $params = [],
 	): array {
 		$result = $this->request($instanceUrl, $accessToken, $userId, 'notifications', $params);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Mark a notification thread as read. Uses PATCH /notifications/threads/{id}.
-	 */
 	public function markNotificationRead(
 		string $instanceUrl,
 		string $accessToken,
@@ -384,9 +321,6 @@ class Inspect360APIService {
 		return !isset($result['error']);
 	}
 
-	/**
-	 * Recent commits in a repo. Optional author filter.
-	 */
 	public function getRepoCommits(
 		string $instanceUrl,
 		string $accessToken,
@@ -397,15 +331,9 @@ class Inspect360APIService {
 	): array {
 		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/commits';
 		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Open milestones in a repo.
-	 */
 	public function getRepoMilestones(
 		string $instanceUrl,
 		string $accessToken,
@@ -416,15 +344,9 @@ class Inspect360APIService {
 	): array {
 		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/milestones';
 		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint, $params);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Repo metadata (stars, forks, open_issues, updated_at, etc.).
-	 */
 	public function getRepoDetails(
 		string $instanceUrl,
 		string $accessToken,
@@ -434,15 +356,9 @@ class Inspect360APIService {
 	): array {
 		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
 		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 
-	/**
-	 * Latest release in a repo. Returns [] if none exists.
-	 */
 	public function getLatestRelease(
 		string $instanceUrl,
 		string $accessToken,
@@ -452,9 +368,6 @@ class Inspect360APIService {
 	): array {
 		$endpoint = 'repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/releases/latest';
 		$result = $this->request($instanceUrl, $accessToken, $userId, $endpoint);
-		if (isset($result['error']) || !is_array($result)) {
-			return [];
-		}
-		return $result;
+		return isset($result['error']) || !is_array($result) ? [] : $result;
 	}
 }

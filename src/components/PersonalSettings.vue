@@ -1,36 +1,70 @@
 <template>
 	<div id="inspect360_prefs" class="section">
 		<h2>
-			<a :class="iconClass" />
-			{{ t('integration_inspect360', 'Forgejo / Gitea integration') }}
+			<a class="icon icon-inspect360" />
+			{{ t('integration_inspect360', 'Inspect360 integration') }}
 		</h2>
 
-		<NcNoteCard v-if="!state.oauth_configured" type="warning">
-			{{ t('integration_inspect360', 'No Forgejo/Gitea OAuth application is configured yet. Ask your Nextcloud administrator to set it up under Administration → Connected accounts.') }}
-		</NcNoteCard>
+		<p class="settings-hint">
+			{{ t('integration_inspect360', 'Instance:') }}
+			<code>{{ state.instance_url }}</code>
+		</p>
 
-		<template v-else>
+		<div v-if="!state.connected" class="signin-form">
 			<p class="settings-hint">
-				{{ t('integration_inspect360', 'Connected instance:') }}
-				<code>{{ state.oauth_instance_url }}</code>
+				{{ t('integration_inspect360', 'Sign in with your Inspect360 email and password. Only the returned refresh token is stored — your password is never persisted.') }}
 			</p>
 
-			<div v-if="!connected" class="actions">
+			<div class="grid-form">
+				<label for="i360-email">
+					<span class="icon icon-mail" />
+					{{ t('integration_inspect360', 'Email') }}
+				</label>
+				<NcTextField
+					id="i360-email"
+					v-model="email"
+					type="email"
+					autocomplete="username"
+					:disabled="loading"
+					:placeholder="t('integration_inspect360', 'you@example.com')" />
+
+				<label for="i360-password">
+					<span class="icon icon-password" />
+					{{ t('integration_inspect360', 'Password') }}
+				</label>
+				<NcPasswordField
+					id="i360-password"
+					v-model="password"
+					autocomplete="current-password"
+					:disabled="loading"
+					@keyup.enter="onSignIn" />
+			</div>
+
+			<div class="actions">
 				<NcButton
 					variant="primary"
-					:disabled="loading"
-					@click="onConnect">
+					:disabled="!canSubmit"
+					@click="onSignIn">
 					<template #icon>
 						<LoginIcon :size="20" />
 					</template>
-					{{ connectLabel }}
+					{{ t('integration_inspect360', 'Sign in') }}
 				</NcButton>
 			</div>
 
-			<div v-else class="actions">
+			<NcNoteCard v-if="policyBlock" type="warning" class="policy-note">
+				{{ policyBlockMessage }}
+			</NcNoteCard>
+		</div>
+
+		<div v-else class="connected-view">
+			<div class="actions">
 				<span class="connected">
 					<CheckCircleIcon :size="20" class="connected-icon" />
-					{{ t('integration_inspect360', 'Connected as {user}', { user: state.user_name }) }}
+					<span>
+						{{ t('integration_inspect360', 'Connected as {email}', { email: state.email }) }}
+						<span v-if="state.role" class="role-chip">{{ formattedRole }}</span>
+					</span>
 				</span>
 				<NcButton variant="secondary" :disabled="loading" @click="onDisconnect">
 					<template #icon>
@@ -39,21 +73,7 @@
 					{{ t('integration_inspect360', 'Disconnect') }}
 				</NcButton>
 			</div>
-
-			<div v-if="connected" class="override">
-				<label for="fgw-override-user">
-					{{ t('integration_inspect360', 'Query as a different username') }}
-				</label>
-				<NcTextField
-					id="fgw-override-user"
-					v-model="overrideUserName"
-					:placeholder="state.user_name"
-					@input="onOverrideChange" />
-				<p class="settings-hint">
-					{{ t('integration_inspect360', 'Widgets filter Forgejo/Gitea data by this login (assigned to me, created by me, my heatmap, etc.). Leave empty to use the OAuth-connected login shown above. Set this when your OAuth account and your queryable account are different — e.g. bot / shared accounts, or an SSO login that differs from your Forgejo username.') }}
-				</p>
-			</div>
-		</template>
+		</div>
 	</div>
 </template>
 
@@ -64,79 +84,108 @@ import { loadState } from '@nextcloud/initial-state'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CheckCircleIcon from 'vue-material-design-icons/CheckCircle.vue'
 import LoginIcon from 'vue-material-design-icons/Login.vue'
 import LogoutIcon from 'vue-material-design-icons/Logout.vue'
-import { delay } from '../utils.js'
 
 export default {
 	name: 'PersonalSettings',
 	components: {
 		NcButton,
 		NcNoteCard,
+		NcPasswordField,
 		NcTextField,
+		CheckCircleIcon,
 		LoginIcon,
 		LogoutIcon,
-		CheckCircleIcon,
 	},
 
 	data() {
 		const s = loadState('integration_inspect360', 'user-config', {})
 		return {
-			state: s,
-			overrideUserName: s.override_user_name || '',
+			state: {
+				connected: !!s.connected,
+				email: s.email || '',
+				role: s.role || '',
+				instance_url: s.instance_url || '',
+			},
+			email: '',
+			password: '',
 			loading: false,
+			policyBlock: null,
 		}
 	},
 
 	computed: {
-		connected() {
-			return !!this.state.user_name
+		canSubmit() {
+			return !this.loading
+				&& this.email.trim().length > 0
+				&& this.password.length > 0
 		},
 
-		instanceType() {
-			return this.state.instance_type_default === 'gitea' ? 'gitea' : 'forgejo'
+		formattedRole() {
+			// snake_case → Title Case, matches the human-readable role names
+			// (Vendor Manager, Compliance Manager, …) from Inspect360.
+			return (this.state.role || '')
+				.split('_')
+				.filter(Boolean)
+				.map(w => w.charAt(0).toUpperCase() + w.slice(1))
+				.join(' ')
 		},
 
-		iconClass() {
-			return 'icon icon-inspect360-' + this.instanceType
+		policyBlockMessage() {
+			const b = this.policyBlock
+			if (b === 'mfa_required') {
+				return t('integration_inspect360', 'This account has multi-factor authentication enabled. MFA-protected accounts are not supported in this release. Wait for a future release with OAuth 2.0 support, or connect a service account without MFA.')
+			}
+			if (b === 'mfa_enrollment_required') {
+				return t('integration_inspect360', 'This account must enrol in multi-factor authentication before it can be used. Complete enrolment in Inspect360, then try connecting again from an MFA-exempt account.')
+			}
+			if (b === 'must_change_password') {
+				return t('integration_inspect360', 'This account must change its password before it can be used. Change it in Inspect360, then sign in again here.')
+			}
+			if (b === 'admin_not_configured') {
+				return t('integration_inspect360', 'The Inspect360 instance URL has not been set by your administrator. Ask them to configure it under Administration → Connected accounts.')
+			}
+			if (b === 'rate_limited') {
+				return t('integration_inspect360', 'Too many sign-in attempts. Wait a few minutes and try again.')
+			}
+			return ''
 		},
-
-		connectLabel() {
-			const label = this.instanceType === 'gitea' ? 'Gitea' : 'Forgejo'
-			return t('integration_inspect360', 'Connect to {label}', { label })
-		},
-	},
-
-	mounted() {
-		const params = new URLSearchParams(window.location.search)
-		if (params.get('inspect360_connected') === '1') {
-			showSuccess(t('integration_inspect360', 'Connected successfully.'))
-			this.cleanQuery()
-		}
-		const err = params.get('inspect360_error')
-		if (err) {
-			showError(t('integration_inspect360', 'Connection failed: {reason}', { reason: err }))
-			this.cleanQuery()
-		}
 	},
 
 	methods: {
-		async onConnect() {
+		async onSignIn() {
+			if (!this.canSubmit) return
 			this.loading = true
+			this.policyBlock = null
 			try {
-				const response = await axios.post(generateUrl('/apps/integration_inspect360/oauth-start'))
-				if (response.data?.authorize_url) {
-					window.location.href = response.data.authorize_url
-					return
+				const response = await axios.post(
+					generateUrl('/apps/integration_inspect360/login'),
+					{ email: this.email.trim(), password: this.password },
+				)
+				const data = response.data || {}
+				if (data.status === 'ok') {
+					this.state.connected = true
+					this.state.email = data.email || this.email.trim()
+					this.state.role = data.role || ''
+					this.password = ''
+					showSuccess(t('integration_inspect360', 'Connected to Inspect360.'))
+				} else {
+					this.policyBlock = data.status
 				}
-				showError(t('integration_inspect360', 'Could not start OAuth flow.'))
-			} catch {
-				const msg = e?.response?.data?.error === 'admin_not_configured'
-					? t('integration_inspect360', 'Admin OAuth application not configured.')
-					: t('integration_inspect360', 'Could not start OAuth flow.')
-				showError(msg)
+			} catch (e) {
+				const status = e?.response?.data?.status
+				const httpStatus = e?.response?.status
+				if (status === 'invalid_credentials' || httpStatus === 401) {
+					showError(t('integration_inspect360', 'Invalid email or password.'))
+				} else if (status && status !== 'ok') {
+					this.policyBlock = status
+				} else {
+					showError(t('integration_inspect360', 'Sign-in failed. Please try again.'))
+				}
 			} finally {
 				this.loading = false
 			}
@@ -145,36 +194,15 @@ export default {
 		async onDisconnect() {
 			this.loading = true
 			try {
-				await axios.put(generateUrl('/apps/integration_inspect360/config'), {
-					values: { user_name: '' },
-				})
-				this.state.user_name = ''
+				await axios.post(generateUrl('/apps/integration_inspect360/disconnect'))
+				this.state.connected = false
+				this.state.email = ''
+				this.state.role = ''
 				showSuccess(t('integration_inspect360', 'Disconnected.'))
 			} catch {
 				showError(t('integration_inspect360', 'Failed to disconnect.'))
 			} finally {
 				this.loading = false
-			}
-		},
-
-		cleanQuery() {
-			const url = new URL(window.location.href)
-			url.searchParams.delete('inspect360_connected')
-			url.searchParams.delete('inspect360_error')
-			window.history.replaceState({}, '', url.toString())
-		},
-
-		onOverrideChange() {
-			delay(this.saveOverride, 800)()
-		},
-
-		async saveOverride() {
-			try {
-				await axios.put(generateUrl('/apps/integration_inspect360/config'), {
-					values: { override_user_name: this.overrideUserName.trim() },
-				})
-			} catch {
-				showError(t('integration_inspect360', 'Failed to save username override.'))
 			}
 		},
 	},
@@ -212,6 +240,29 @@ export default {
 		}
 	}
 
+	.grid-form {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		column-gap: 12px;
+		row-gap: 10px;
+		align-items: center;
+		max-width: 480px;
+		margin-top: 12px;
+
+		label {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			white-space: nowrap;
+
+			.icon {
+				display: inline-block;
+				width: 20px;
+				height: 20px;
+			}
+		}
+	}
+
 	.actions {
 		display: flex;
 		align-items: center;
@@ -222,32 +273,27 @@ export default {
 		.connected {
 			display: inline-flex;
 			align-items: center;
-			gap: 6px;
+			gap: 8px;
 			font-weight: 500;
 
 			.connected-icon {
 				color: var(--color-success);
 			}
+
+			.role-chip {
+				display: inline-block;
+				margin-left: 6px;
+				padding: 1px 8px;
+				border-radius: 10px;
+				background: var(--color-background-hover);
+				font-size: 12px;
+				font-weight: 400;
+			}
 		}
 	}
 
-	.override {
-		margin-top: 24px;
-		padding-top: 16px;
-		border-top: 1px solid var(--color-border);
-		max-width: 480px;
-
-		label {
-			display: block;
-			margin-bottom: 6px;
-			font-weight: 500;
-		}
-
-		.settings-hint {
-			margin-top: 8px;
-			font-size: 12px;
-			line-height: 1.4;
-		}
+	.policy-note {
+		margin-top: 16px;
 	}
 }
 </style>

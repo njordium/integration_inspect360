@@ -16,7 +16,7 @@ use OCP\IRequest;
 
 use OCA\Inspect360\AppInfo\Application;
 use OCA\Inspect360\Service\Inspect360APIService;
-use OCA\Inspect360\Service\TokenStorage;
+use OCA\Inspect360\Service\Inspect360AuthService;
 
 class Inspect360APIController extends Controller {
 
@@ -33,7 +33,7 @@ class Inspect360APIController extends Controller {
 		IRequest $request,
 		private IConfig $config,
 		private Inspect360APIService $api,
-		private TokenStorage $tokens,
+		private Inspect360AuthService $auth,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -45,8 +45,8 @@ class Inspect360APIController extends Controller {
 	 */
 	public function getInspect360Url(): DataResponse {
 		return new DataResponse([
-			'instance_url' => rtrim($this->config->getAppValue(Application::APP_ID, 'oauth_instance_url'), '/'),
-			'instance_type' => $this->config->getAppValue(Application::APP_ID, 'instance_type_default', 'forgejo'),
+			'instance_url' => $this->auth->getInstanceUrl(),
+			'instance_type' => 'inspect360',
 			'user_name' => $this->config->getUserValue($this->userId ?? '', Application::APP_ID, 'user_name'),
 		]);
 	}
@@ -204,7 +204,7 @@ class Inspect360APIController extends Controller {
 			'total' => $total,
 			'user_name' => $userName,
 			'instance_url' => $instanceUrl,
-			'instance_type' => $this->config->getAppValue(Application::APP_ID, 'instance_type_default', 'forgejo'),
+			'instance_type' => 'inspect360',
 			'refresh_interval_seconds' => $this->readRefreshInterval('heatmap'),
 			'window_weeks' => $window,
 		]);
@@ -276,7 +276,7 @@ class Inspect360APIController extends Controller {
 			],
 			'user_name' => $user,
 			'instance_url' => $instanceUrl,
-			'instance_type' => $this->config->getAppValue(Application::APP_ID, 'instance_type_default', 'forgejo'),
+			'instance_type' => 'inspect360',
 			'refresh_interval_seconds' => $this->readRefreshInterval('stats'),
 		]);
 	}
@@ -634,8 +634,8 @@ class Inspect360APIController extends Controller {
 	 * @return array{0: string, 1: string} [instanceUrl, accessToken]
 	 */
 	private function credentials(): array {
-		$instanceUrl = rtrim($this->config->getAppValue(Application::APP_ID, 'oauth_instance_url'), '/');
-		$accessToken = $this->userId !== null ? $this->tokens->getAccessToken($this->userId) : '';
+		$instanceUrl = $this->auth->getInstanceUrl();
+		$accessToken = $this->userId !== null ? $this->auth->getAccessToken($this->userId) : '';
 		return [$instanceUrl, $accessToken];
 	}
 
