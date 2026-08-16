@@ -187,15 +187,18 @@ export default {
 			return (this.instanceUrl || '') + path
 		},
 
-		async onSaveSettings(seconds) {
+		async onSaveSettings(payload) {
 			this.savingSettings = true
 			try {
 				await axios.put(
-					generateUrl('/apps/integration_inspect360/widget/' + WIDGET_KEY + '/refresh-interval'),
-					{ seconds },
+					generateUrl('/apps/integration_inspect360/widget/' + WIDGET_KEY + '/preferences'),
+					{
+						refresh_seconds: payload.refreshSeconds,
+						max_items: payload.maxItems,  // will be null — Overview has fixed 4 tiles
+					},
 				)
-				this.refreshIntervalSeconds = seconds
-				this.autoRefresh?.setIntervalMs(seconds * 1000)
+				this.refreshIntervalSeconds = payload.refreshSeconds
+				this.autoRefresh?.setIntervalMs(payload.refreshSeconds * 1000)
 				this.showSettings = false
 			} catch { /* silent — user can retry from within the still-open modal */ }
 			finally {

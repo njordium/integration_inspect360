@@ -23,6 +23,6 @@ return [
 		['name' => 'inspect360API#getAddedVendors', 'url' => '/vendors/added', 'verb' => 'GET'],
 		['name' => 'inspect360API#getAssessed', 'url' => '/assessments/recent', 'verb' => 'GET'],
 		['name' => 'inspect360API#getInstanceInfo', 'url' => '/instance-info', 'verb' => 'GET'],
-		['name' => 'inspect360API#setRefreshInterval', 'url' => '/widget/{widgetKey}/refresh-interval', 'verb' => 'PUT'],
+		['name' => 'inspect360API#setWidgetPreferences', 'url' => '/widget/{widgetKey}/preferences', 'verb' => 'PUT'],
 	]
 ];

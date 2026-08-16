@@ -8,6 +8,11 @@
 				<RefreshIntervalPicker v-model="draftSeconds" />
 			</section>
 
+			<section v-if="showMaxItems" class="i360-modal__section">
+				<h4>{{ t('integration_inspect360', 'Records to show') }}</h4>
+				<MaxItemsPicker v-model="draftMaxItems" />
+			</section>
+
 			<div class="i360-modal__actions">
 				<NcButton @click="onCancel">
 					{{ t('integration_inspect360', 'Cancel') }}
@@ -32,17 +37,22 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import ContentSaveIcon from 'vue-material-design-icons/ContentSave.vue'
+import MaxItemsPicker from './MaxItemsPicker.vue'
 import RefreshIntervalPicker from './RefreshIntervalPicker.vue'
 
 /**
  * Shared widget-settings modal used by all four Inspect360 widgets.
- * Mirrors the integration_forgejo_gitea pattern: NcModal with a draft
- * refresh-cadence value, Cancel/Save actions, and a saving spinner on
- * the primary button.
+ * Mirrors the integration_forgejo_gitea pattern: NcModal with draft
+ * settings, Cancel / Save actions, saving spinner on the primary button.
+ *
+ * The "Records to show" section is rendered only when maxItems is a
+ * number — the Overview widget passes null (fixed 4-tile layout, no
+ * records-count concept), the three list widgets pass a real value.
  *
  * Emits:
  *  - close: user cancelled (or closed via backdrop / escape).
- *  - save(seconds): user confirmed; parent persists and closes.
+ *  - save({refreshSeconds, maxItems}): user confirmed. maxItems is null
+ *    when the widget didn't opt in via the prop.
  */
 export default {
 	name: 'WidgetSettingsModal',
@@ -51,30 +61,47 @@ export default {
 		NcLoadingIcon,
 		NcModal,
 		RefreshIntervalPicker,
+		MaxItemsPicker,
 		ContentSaveIcon,
 	},
 	props: {
 		refreshSeconds: { type: Number, default: 300 },
+		maxItems: { type: Number, default: null },
 		saving: { type: Boolean, default: false },
 	},
 	emits: ['close', 'save'],
 	data() {
 		return {
 			draftSeconds: this.refreshSeconds,
+			draftMaxItems: this.maxItems ?? 10,
 		}
+	},
+	computed: {
+		showMaxItems() {
+			return this.maxItems !== null && this.maxItems !== undefined
+		},
 	},
 	watch: {
 		refreshSeconds(v) {
 			this.draftSeconds = v
 		},
+		maxItems(v) {
+			if (v !== null && v !== undefined) {
+				this.draftMaxItems = v
+			}
+		},
 	},
 	methods: {
 		onCancel() {
 			this.draftSeconds = this.refreshSeconds
+			this.draftMaxItems = this.maxItems ?? 10
 			this.$emit('close')
 		},
 		onSave() {
-			this.$emit('save', this.draftSeconds)
+			this.$emit('save', {
+				refreshSeconds: this.draftSeconds,
+				maxItems: this.showMaxItems ? this.draftMaxItems : null,
+			})
 		},
 	},
 }

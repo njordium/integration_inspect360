@@ -26,16 +26,17 @@ use OCA\Inspect360\Service\Inspect360AuthService;
  */
 class Inspect360APIController extends Controller {
 
-	// Reduced from 30 to 7 in v0.3.2 — feedback from first live deploy was
-	// that 8+ rows crowded the dashboard column's bottom edge. 7 gives a
-	// short, scannable list with visual breathing room and pushes anything
-	// beyond to the "Show all" deep link.
-	private const MAX_ITEMS_PER_WIDGET = 7;
 	private const DEFAULT_REFRESH_SECONDS = 300;
 	private const ALLOWED_REFRESH_SECONDS = [0, 30, 60, 300, 900, 1800, 3600];
-	// Widget-key whitelist for setRefreshInterval (finding H-L5) — prevents
-	// authenticated users from populating oc_preferences with arbitrary
-	// `<foo>_refresh_seconds` rows.
+	// Per-widget "Records to show" setting (v0.3.3). Default 10 gives a
+	// short, scannable list that still leaves room to grow — the list
+	// container is scrollable so users can pick up to 100 without the
+	// widget breaking out of the dashboard column.
+	private const DEFAULT_MAX_ITEMS = 10;
+	private const ALLOWED_MAX_ITEMS = [5, 10, 20, 50, 100];
+	// Widget-key whitelist for the preferences endpoint (finding H-L5) —
+	// prevents authenticated users from populating oc_preferences with
+	// arbitrary `<foo>_refresh_seconds` or `<foo>_max_items` rows.
 	private const KNOWN_WIDGET_KEYS = [
 		'inspect360_overview',
 		'inspect360_approved_vendors',
@@ -92,29 +93,33 @@ class Inspect360APIController extends Controller {
 
 	/**
 	 * Approved vendors — list of suppliers with `status=approved`,
-	 * capped at MAX_ITEMS_PER_WIDGET.
+	 * capped at the per-user "records to show" setting.
 	 *
 	 * @NoAdminRequired
 	 */
 	public function getApprovedVendors(): DataResponse {
-		return $this->respondVendorList('inspect360_approved_vendors', [
+		$widgetKey = 'inspect360_approved_vendors';
+		$maxItems = $this->readMaxItems($widgetKey);
+		return $this->respondVendorList($widgetKey, [
 			'status' => 'approved',
-			'limit' => self::MAX_ITEMS_PER_WIDGET,
+			'limit' => $maxItems,
 			'page' => 1,
 		]);
 	}
 
 	/**
 	 * Recently added vendors — plain list ordered by the API's default
-	 * (which appears to be recency), capped at MAX_ITEMS_PER_WIDGET.
-	 * If the upstream default sort turns out to be alphabetical, we'll
-	 * add an explicit sort=created_at&order=desc pair here.
+	 * (which appears to be recency), capped at the per-user "records to
+	 * show" setting. If the upstream default sort turns out to be
+	 * alphabetical, we'll add an explicit sort=created_at&order=desc pair.
 	 *
 	 * @NoAdminRequired
 	 */
 	public function getAddedVendors(): DataResponse {
-		return $this->respondVendorList('inspect360_added_vendors', [
-			'limit' => self::MAX_ITEMS_PER_WIDGET,
+		$widgetKey = 'inspect360_added_vendors';
+		$maxItems = $this->readMaxItems($widgetKey);
+		return $this->respondVendorList($widgetKey, [
+			'limit' => $maxItems,
 			'page' => 1,
 			'sort' => 'created_at',
 			'order' => 'desc',
@@ -122,8 +127,8 @@ class Inspect360APIController extends Controller {
 	}
 
 	/**
-	 * Recent assessments across the user's accessible suppliers,
-	 * capped at MAX_ITEMS_PER_WIDGET. Sorted client-side by
+	 * Recent assessments across the user's accessible suppliers, capped
+	 * at the per-user "records to show" setting. Sorted client-side by
 	 * updated_at desc so the freshest changes bubble to the top even
 	 * when the upstream returns in a different order.
 	 *
@@ -134,8 +139,10 @@ class Inspect360APIController extends Controller {
 		if ($err !== null) {
 			return $err;
 		}
+		$widgetKey = 'inspect360_assessed';
+		$maxItems = $this->readMaxItems($widgetKey);
 		$raw = $this->api->getAssessments($instanceUrl, $accessToken, $this->userId, [
-			'limit' => self::MAX_ITEMS_PER_WIDGET,
+			'limit' => $maxItems,
 		]);
 		usort($raw, static function ($a, $b) {
 			return strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
@@ -143,7 +150,10 @@ class Inspect360APIController extends Controller {
 		$items = array_map([$this, 'projectAssessment'], $raw);
 		return new DataResponse([
 			'items' => $items,
-			'config' => ['refresh_interval_seconds' => $this->readRefreshInterval('inspect360_assessed')],
+			'config' => [
+				'refresh_interval_seconds' => $this->readRefreshInterval($widgetKey),
+				'max_items' => $maxItems,
+			],
 			'instance_url' => $this->auth->getInstanceUrl(),
 		]);
 	}
@@ -158,27 +168,49 @@ class Inspect360APIController extends Controller {
 	}
 
 	/**
-	 * Store a per-widget refresh cadence. Whitelist-validated against
-	 * ALLOWED_REFRESH_SECONDS; anything else is silently dropped.
+	 * Store per-widget preferences (refresh cadence + records-to-show).
+	 * Both fields are optional in the request; when omitted, the stored
+	 * value stays as-is. Whitelist-validated against ALLOWED_REFRESH_SECONDS
+	 * and ALLOWED_MAX_ITEMS respectively.
+	 *
+	 * Replaces the v0.3.2 refresh-interval-only endpoint — one save call
+	 * from the widget-settings modal persists both fields in one hit.
 	 *
 	 * @NoAdminRequired
 	 */
-	public function setRefreshInterval(string $widgetKey, int $seconds): DataResponse {
+	public function setWidgetPreferences(
+		string $widgetKey,
+		?int $refresh_seconds = null,
+		?int $max_items = null,
+	): DataResponse {
 		if ($this->userId === null) {
 			return new DataResponse(['error' => 'no_session'], Http::STATUS_UNAUTHORIZED);
 		}
 		if (!in_array($widgetKey, self::KNOWN_WIDGET_KEYS, true)) {
 			return new DataResponse(['error' => 'invalid_widget_key'], Http::STATUS_BAD_REQUEST);
 		}
-		if (!in_array($seconds, self::ALLOWED_REFRESH_SECONDS, true)) {
-			return new DataResponse(['error' => 'invalid_interval'], Http::STATUS_BAD_REQUEST);
+		if ($refresh_seconds !== null) {
+			if (!in_array($refresh_seconds, self::ALLOWED_REFRESH_SECONDS, true)) {
+				return new DataResponse(['error' => 'invalid_interval'], Http::STATUS_BAD_REQUEST);
+			}
+			$this->config->setUserValue(
+				$this->userId,
+				Application::APP_ID,
+				$widgetKey . '_refresh_seconds',
+				(string) $refresh_seconds,
+			);
 		}
-		$this->config->setUserValue(
-			$this->userId,
-			Application::APP_ID,
-			$widgetKey . '_refresh_seconds',
-			(string) $seconds,
-		);
+		if ($max_items !== null) {
+			if (!in_array($max_items, self::ALLOWED_MAX_ITEMS, true)) {
+				return new DataResponse(['error' => 'invalid_max_items'], Http::STATUS_BAD_REQUEST);
+			}
+			$this->config->setUserValue(
+				$this->userId,
+				Application::APP_ID,
+				$widgetKey . '_max_items',
+				(string) $max_items,
+			);
+		}
 		return new DataResponse(['ok' => 1]);
 	}
 
@@ -192,7 +224,10 @@ class Inspect360APIController extends Controller {
 		return new DataResponse([
 			'items' => $items,
 			'total' => $page['total'],
-			'config' => ['refresh_interval_seconds' => $this->readRefreshInterval($widgetKey)],
+			'config' => [
+				'refresh_interval_seconds' => $this->readRefreshInterval($widgetKey),
+				'max_items' => $this->readMaxItems($widgetKey),
+			],
 			'instance_url' => $instanceUrl,
 		]);
 	}
@@ -283,5 +318,23 @@ class Inspect360APIController extends Controller {
 		return in_array($seconds, self::ALLOWED_REFRESH_SECONDS, true)
 			? $seconds
 			: self::DEFAULT_REFRESH_SECONDS;
+	}
+
+	/**
+	 * Per-widget "records to show" setting. Read from user config, coerced
+	 * against ALLOWED_MAX_ITEMS whitelist. Falls back to DEFAULT_MAX_ITEMS
+	 * if unset or out of range.
+	 */
+	private function readMaxItems(string $widgetKey): int {
+		$raw = $this->config->getUserValue(
+			$this->userId ?? '',
+			Application::APP_ID,
+			$widgetKey . '_max_items',
+			(string) self::DEFAULT_MAX_ITEMS,
+		);
+		$items = (int) $raw;
+		return in_array($items, self::ALLOWED_MAX_ITEMS, true)
+			? $items
+			: self::DEFAULT_MAX_ITEMS;
 	}
 }

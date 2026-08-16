@@ -1,6 +1,6 @@
 {
 	"name": "integration_inspect360",
-	"version": "0.3.2",
+	"version": "0.3.3",
 	"description": "Inspect360 integration for Nextcloud",
 	"main": "index.js",
 	"directories": {

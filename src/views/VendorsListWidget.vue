@@ -20,58 +20,51 @@
 		<WidgetSettingsModal
 			v-if="showSettings"
 			:refreshSeconds="refreshIntervalSeconds"
+			:maxItems="maxItems"
 			:saving="savingSettings"
 			@close="showSettings = false"
 			@save="onSaveSettings" />
 
 		<div v-if="loading && !loaded" class="i360-status">
-			<NcLoadingIcon :size="20" />
-			<span>{{ t('integration_inspect360', 'Loading…') }}</span>
+			<NcLoadingIcon :size="28" />
 		</div>
 
-		<NcEmptyContent
-			v-else-if="notConnected"
-			:title="t('integration_inspect360', 'Not connected')"
-			:description="t('integration_inspect360', 'Sign in to Inspect360 from Personal Settings.')">
-			<template #icon>
-				<LinkOffIcon :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="notConnected" class="i360-status">
+			<LinkOffIcon :size="40" class="i360-status__icon" />
+			<span>{{ t('integration_inspect360', 'Sign in to Inspect360 from Personal Settings.') }}</span>
+		</div>
 
-		<NcEmptyContent
-			v-else-if="hardError"
-			:title="t('integration_inspect360', 'Inspect360 unavailable')"
-			:description="hardError">
-			<template #icon>
-				<AlertCircleOutlineIcon :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="hardError" class="i360-status i360-status--error">
+			<AlertCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<span>{{ hardError }}</span>
+		</div>
 
-		<NcEmptyContent
-			v-else-if="loaded && items.length === 0"
-			:title="emptyTitle"
-			:description="emptyDescription">
-			<template #icon>
-				<component :is="headerIconComponent" :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="!items.length" class="i360-status">
+			<CheckCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<span>{{ emptyMessage }}</span>
+		</div>
 
 		<template v-else>
 			<ul class="i360-rows">
 				<li v-for="v in items" :key="v.id" class="i360-row">
 					<a class="i360-row__link" :href="link('/vendors/' + v.id)" target="_blank" rel="noopener">
-						<div class="i360-row__top">
-							<span class="i360-row__title">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</span>
-							<span class="i360-chip" :class="'i360-chip--' + v.status">{{ prettyStatus(v.status) }}</span>
-						</div>
-						<div class="i360-row__meta">
-							<span v-if="v.city" class="i360-row__meta-item">{{ v.city }}</span>
-							<span v-if="v.country" class="i360-row__meta-item">{{ v.country }}</span>
-							<span v-if="v.org_number" class="i360-row__meta-item i360-row__meta-item--dim">{{ v.org_number }}</span>
-							<span v-if="v.critical_supplier_flag" class="i360-flag i360-flag--critical" :title="t('integration_inspect360', 'Critical supplier')">C</span>
-							<span v-if="v.ict_provider_flag" class="i360-flag i360-flag--ict" :title="t('integration_inspect360', 'ICT provider')">ICT</span>
-							<span v-if="v.data_processor_flag" class="i360-flag i360-flag--dp" :title="t('integration_inspect360', 'Data processor')">DP</span>
-							<span v-if="v.aml_regulated" class="i360-flag i360-flag--aml" :title="t('integration_inspect360', 'AML regulated')">AML</span>
+						<span class="i360-badge" :class="'i360-badge--' + badgeVariant(v.status)">
+							<component :is="badgeIcon(v.status)" :size="16" />
+						</span>
+						<div class="i360-row__body">
+							<div class="i360-row__top">
+								<span class="i360-row__title">{{ v.org_name || t('integration_inspect360', '(unnamed)') }}</span>
+								<span class="i360-chip" :class="'i360-chip--' + v.status">{{ prettyStatus(v.status) }}</span>
+							</div>
+							<div class="i360-row__meta">
+								<span v-if="v.city" class="i360-row__meta-item">{{ v.city }}</span>
+								<span v-if="v.country" class="i360-row__meta-item">{{ v.country }}</span>
+								<span v-if="rowTime(v)" class="i360-row__meta-item i360-row__meta-item--dim">{{ rowTime(v) }}</span>
+								<span v-if="v.critical_supplier_flag" class="i360-flag i360-flag--critical" :title="t('integration_inspect360', 'Critical supplier')">C</span>
+								<span v-if="v.ict_provider_flag" class="i360-flag i360-flag--ict" :title="t('integration_inspect360', 'ICT provider')">ICT</span>
+								<span v-if="v.data_processor_flag" class="i360-flag i360-flag--dp" :title="t('integration_inspect360', 'Data processor')">DP</span>
+								<span v-if="v.aml_regulated" class="i360-flag i360-flag--aml" :title="t('integration_inspect360', 'AML regulated')">AML</span>
+							</div>
 						</div>
 					</a>
 				</li>
@@ -95,15 +88,17 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
+import ArchiveOutlineIcon from 'vue-material-design-icons/ArchiveOutline.vue'
+import CheckCircleIcon from 'vue-material-design-icons/CheckCircle.vue'
+import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
-import ShieldCheckIcon from 'vue-material-design-icons/ShieldCheck.vue'
 import WidgetSettingsModal from '../components/WidgetSettingsModal.vue'
 import { useAutoRefresh } from '../composables/useAutoRefresh.js'
 
@@ -119,16 +114,18 @@ export default {
 	components: {
 		NcActionButton,
 		NcActions,
-		NcEmptyContent,
 		NcLoadingIcon,
 		WidgetSettingsModal,
-		AccountPlusIcon,
 		AlertCircleOutlineIcon,
+		ArchiveOutlineIcon,
+		CheckCircleIcon,
+		CheckCircleOutlineIcon,
+		ClockOutlineIcon,
 		CogIcon,
 		LinkOffIcon,
 		OpenInNewIcon,
+		PencilOutlineIcon,
 		RefreshIcon,
-		ShieldCheckIcon,
 	},
 
 	props: {
@@ -147,6 +144,7 @@ export default {
 			total: 0,
 			instanceUrl: '',
 			refreshIntervalSeconds: 300,
+			maxItems: 10,
 			showSettings: false,
 			savingSettings: false,
 			autoRefresh: null,
@@ -154,24 +152,14 @@ export default {
 	},
 
 	computed: {
-		headerIconComponent() {
-			return this.variant === 'added' ? AccountPlusIcon : ShieldCheckIcon
-		},
-
 		statusFilter() {
 			return this.variant === 'approved' ? 'approved' : ''
 		},
 
-		emptyTitle() {
+		emptyMessage() {
 			return this.variant === 'added'
-				? t('integration_inspect360', 'No vendors added yet')
-				: t('integration_inspect360', 'No approved vendors')
-		},
-
-		emptyDescription() {
-			return this.variant === 'added'
-				? t('integration_inspect360', 'Newly added vendors will appear here.')
-				: t('integration_inspect360', 'Vendors that pass approval will appear here.')
+				? t('integration_inspect360', 'No vendors added yet.')
+				: t('integration_inspect360', 'No approved vendors — new approvals will appear here.')
 		},
 	},
 
@@ -197,6 +185,10 @@ export default {
 					this.refreshIntervalSeconds = newInterval
 					this.autoRefresh?.setIntervalMs(newInterval * 1000)
 				}
+				const newMax = Number(data.config?.max_items) || 10
+				if (newMax !== this.maxItems) {
+					this.maxItems = newMax
+				}
 				this.notConnected = false
 				this.hardError = null
 			} catch (e) {
@@ -219,20 +211,65 @@ export default {
 			return STATUS_LABELS[s] || s || ''
 		},
 
+		badgeVariant(status) {
+			if (status === 'approved') return 'approved'
+			if (status === 'under_review') return 'review'
+			if (status === 'draft') return 'draft'
+			if (status === 'archived') return 'archived'
+			return 'draft'
+		},
+
+		badgeIcon(status) {
+			if (status === 'approved') return CheckCircleIcon
+			if (status === 'under_review') return ClockOutlineIcon
+			if (status === 'draft') return PencilOutlineIcon
+			if (status === 'archived') return ArchiveOutlineIcon
+			return PencilOutlineIcon
+		},
+
+		rowTime(v) {
+			// Prefer approved_at when available (most meaningful for the
+			// Approved widget), fall back to created_at.
+			const iso = v.approved_at || v.created_at
+			return this.relativeTime(iso)
+		},
+
+		relativeTime(iso) {
+			if (!iso) return ''
+			const then = new Date(iso).getTime()
+			if (!then) return ''
+			const diff = Math.max(0, Date.now() - then)
+			const min = Math.floor(diff / 60000)
+			if (min < 1) return t('integration_inspect360', 'just now')
+			if (min < 60) return t('integration_inspect360', '{n} min ago', { n: min })
+			const h = Math.floor(min / 60)
+			if (h < 24) return t('integration_inspect360', '{n}h ago', { n: h })
+			const d = Math.floor(h / 24)
+			if (d < 7) return t('integration_inspect360', '{n}d ago', { n: d })
+			return new Date(iso).toLocaleDateString()
+		},
+
 		link(path) {
 			return (this.instanceUrl || '') + path
 		},
 
-		async onSaveSettings(seconds) {
+		async onSaveSettings(payload) {
 			this.savingSettings = true
 			try {
 				await axios.put(
-					generateUrl('/apps/integration_inspect360/widget/' + this.widgetKey + '/refresh-interval'),
-					{ seconds },
+					generateUrl('/apps/integration_inspect360/widget/' + this.widgetKey + '/preferences'),
+					{
+						refresh_seconds: payload.refreshSeconds,
+						max_items: payload.maxItems,
+					},
 				)
-				this.refreshIntervalSeconds = seconds
-				this.autoRefresh?.setIntervalMs(seconds * 1000)
+				this.refreshIntervalSeconds = payload.refreshSeconds
+				this.autoRefresh?.setIntervalMs(payload.refreshSeconds * 1000)
+				if (payload.maxItems !== null) {
+					this.maxItems = payload.maxItems
+				}
 				this.showSettings = false
+				this.fetch()  // re-fetch to pick up the new max_items cap
 			} catch { /* silent — user can retry from within the still-open modal */ }
 			finally {
 				this.savingSettings = false
@@ -249,7 +286,7 @@ export default {
 	gap: 4px;
 	padding: 4px 0;
 	overflow: hidden;
-	max-height: 500px;
+	max-height: 520px;
 }
 
 .i360-toolbar {
@@ -263,10 +300,23 @@ export default {
 
 .i360-status {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	gap: 8px;
-	padding: 16px 8px;
+	justify-content: center;
+	gap: 12px;
+	padding: 32px 12px;
 	color: var(--color-text-maxcontrast);
+	text-align: center;
+
+	&__icon {
+		opacity: 0.5;
+	}
+
+	&--error {
+		color: var(--color-error);
+
+		.i360-status__icon { opacity: 1; }
+	}
 }
 
 .i360-rows {
@@ -275,8 +325,9 @@ export default {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	// No max-height / internal scroll — v0.3.2 caps rows at 7 upstream, so
-	// the full list always fits and anything more goes via "Show all".
+	max-height: 400px;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .i360-row {
@@ -288,10 +339,33 @@ export default {
 }
 
 .i360-row__link {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	padding: 6px 8px;
 	color: inherit;
 	text-decoration: none;
+	min-width: 0;
+}
+
+.i360-badge {
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	color: white;
+
+	&--approved { background: #16a34a; }
+	&--review   { background: #ea580c; }
+	&--draft    { background: #6b7280; }
+	&--archived { background: #4b5563; }
+	&--issues   { background: #dc2626; }
+}
+
+.i360-row__body {
+	flex: 1;
 	min-width: 0;
 }
 
@@ -317,7 +391,7 @@ export default {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px 6px;
-	margin-top: 3px;
+	margin-top: 2px;
 	font-size: 11px;
 	color: var(--color-text-maxcontrast);
 	min-width: 0;
@@ -329,11 +403,6 @@ export default {
 	&--dim { opacity: 0.7; }
 }
 
-/*
- * Solid, high-contrast chips — the earlier translucent tint (~20% alpha) was
- * near-invisible on Nextcloud's grey widget background. Fixed hues over
- * theme variables so contrast is consistent in both light and dark mode.
- */
 .i360-chip {
 	flex-shrink: 0;
 	display: inline-block;

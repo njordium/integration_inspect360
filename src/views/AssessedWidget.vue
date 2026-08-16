@@ -20,57 +20,50 @@
 		<WidgetSettingsModal
 			v-if="showSettings"
 			:refreshSeconds="refreshIntervalSeconds"
+			:maxItems="maxItems"
 			:saving="savingSettings"
 			@close="showSettings = false"
 			@save="onSaveSettings" />
 
 		<div v-if="loading && !loaded" class="i360-status">
-			<NcLoadingIcon :size="20" />
-			<span>{{ t('integration_inspect360', 'Loading…') }}</span>
+			<NcLoadingIcon :size="28" />
 		</div>
 
-		<NcEmptyContent
-			v-else-if="notConnected"
-			:title="t('integration_inspect360', 'Not connected')"
-			:description="t('integration_inspect360', 'Sign in to Inspect360 from Personal Settings.')">
-			<template #icon>
-				<LinkOffIcon :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="notConnected" class="i360-status">
+			<LinkOffIcon :size="40" class="i360-status__icon" />
+			<span>{{ t('integration_inspect360', 'Sign in to Inspect360 from Personal Settings.') }}</span>
+		</div>
 
-		<NcEmptyContent
-			v-else-if="hardError"
-			:title="t('integration_inspect360', 'Inspect360 unavailable')"
-			:description="hardError">
-			<template #icon>
-				<AlertCircleOutlineIcon :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="hardError" class="i360-status i360-status--error">
+			<AlertCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<span>{{ hardError }}</span>
+		</div>
 
-		<NcEmptyContent
-			v-else-if="loaded && items.length === 0"
-			:title="t('integration_inspect360', 'No assessments yet')"
-			:description="t('integration_inspect360', 'Vendor assessments will appear here as they are opened.')">
-			<template #icon>
-				<ClipboardCheckIcon :size="48" />
-			</template>
-		</NcEmptyContent>
+		<div v-else-if="!items.length" class="i360-status">
+			<CheckCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<span>{{ t('integration_inspect360', 'No assessments yet — new ones will appear here.') }}</span>
+		</div>
 
 		<template v-else>
 			<ul class="i360-rows">
 				<li v-for="a in items" :key="a.id" class="i360-row">
 					<a class="i360-row__link" :href="link('/assessments/' + a.id)" target="_blank" rel="noopener">
-						<div class="i360-row__top">
-							<span class="i360-row__title">{{ a.supplier_name || t('integration_inspect360', '(unnamed vendor)') }}</span>
-							<span v-if="finalRisk(a)" class="i360-risk" :class="'i360-risk--' + finalRisk(a).toLowerCase()">
-								{{ finalRisk(a) }}
-							</span>
-						</div>
-						<div class="i360-row__meta">
-							<span class="i360-row__meta-item">{{ prettyStatus(a.status) }}</span>
-							<span v-if="a.current_screen" class="i360-row__meta-item i360-row__meta-item--dim">{{ a.current_screen }}</span>
-							<span v-if="a.updated_at" class="i360-row__meta-item i360-row__meta-item--dim">{{ relativeTime(a.updated_at) }}</span>
-							<span v-if="a.decision" class="i360-chip i360-chip--decision">{{ a.decision }}</span>
+						<span class="i360-badge" :class="'i360-badge--' + badgeVariant(a.status, finalRisk(a))">
+							<component :is="badgeIcon(a.status)" :size="16" />
+						</span>
+						<div class="i360-row__body">
+							<div class="i360-row__top">
+								<span class="i360-row__title">{{ a.supplier_name || t('integration_inspect360', '(unnamed vendor)') }}</span>
+								<span v-if="finalRisk(a)" class="i360-risk" :class="'i360-risk--' + finalRisk(a).toLowerCase()">
+									{{ finalRisk(a) }}
+								</span>
+							</div>
+							<div class="i360-row__meta">
+								<span class="i360-row__meta-item">{{ prettyStatus(a.status) }}</span>
+								<span v-if="a.current_screen" class="i360-row__meta-item i360-row__meta-item--dim">{{ a.current_screen }}</span>
+								<span v-if="a.updated_at" class="i360-row__meta-item i360-row__meta-item--dim">{{ relativeTime(a.updated_at) }}</span>
+								<span v-if="a.decision" class="i360-chip i360-chip--decision">{{ a.decision }}</span>
+							</div>
 						</div>
 					</a>
 				</li>
@@ -89,10 +82,12 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
-import ClipboardCheckIcon from 'vue-material-design-icons/ClipboardCheck.vue'
+import CheckCircleIcon from 'vue-material-design-icons/CheckCircle.vue'
+import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import CloseCircleIcon from 'vue-material-design-icons/CloseCircle.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
@@ -115,11 +110,13 @@ export default {
 	components: {
 		NcActionButton,
 		NcActions,
-		NcEmptyContent,
 		NcLoadingIcon,
 		WidgetSettingsModal,
 		AlertCircleOutlineIcon,
-		ClipboardCheckIcon,
+		CheckCircleIcon,
+		CheckCircleOutlineIcon,
+		ClockOutlineIcon,
+		CloseCircleIcon,
 		CogIcon,
 		LinkOffIcon,
 		OpenInNewIcon,
@@ -135,6 +132,7 @@ export default {
 			items: [],
 			instanceUrl: '',
 			refreshIntervalSeconds: 300,
+			maxItems: 10,
 			showSettings: false,
 			savingSettings: false,
 			autoRefresh: null,
@@ -162,6 +160,10 @@ export default {
 					this.refreshIntervalSeconds = newInterval
 					this.autoRefresh?.setIntervalMs(newInterval * 1000)
 				}
+				const newMax = Number(data.config?.max_items) || 10
+				if (newMax !== this.maxItems) {
+					this.maxItems = newMax
+				}
 				this.notConnected = false
 				this.hardError = null
 			} catch (e) {
@@ -188,11 +190,25 @@ export default {
 			return a.final_risk_level || a.combined_risk_level || a.basic_tprm_risk_level || null
 		},
 
+		badgeVariant(status, risk) {
+			if (status === 'approved' || status === 'completed') return 'approved'
+			if (status === 'rejected') return 'issues'
+			if (risk && (risk.toLowerCase() === 'high' || risk.toLowerCase() === 'critical')) return 'issues'
+			if (status === 'in_progress' || status === 'pending_review') return 'review'
+			return 'draft'
+		},
+
+		badgeIcon(status) {
+			if (status === 'approved' || status === 'completed') return CheckCircleIcon
+			if (status === 'rejected') return CloseCircleIcon
+			return ClockOutlineIcon
+		},
+
 		relativeTime(iso) {
 			if (!iso) return ''
 			const then = new Date(iso).getTime()
-			const now = Date.now()
-			const diff = Math.max(0, now - then)
+			if (!then) return ''
+			const diff = Math.max(0, Date.now() - then)
 			const min = Math.floor(diff / 60000)
 			if (min < 1) return t('integration_inspect360', 'just now')
 			if (min < 60) return t('integration_inspect360', '{n} min ago', { n: min })
@@ -207,17 +223,24 @@ export default {
 			return (this.instanceUrl || '') + path
 		},
 
-		async onSaveSettings(seconds) {
+		async onSaveSettings(payload) {
 			this.savingSettings = true
 			try {
 				await axios.put(
-					generateUrl('/apps/integration_inspect360/widget/' + WIDGET_KEY + '/refresh-interval'),
-					{ seconds },
+					generateUrl('/apps/integration_inspect360/widget/' + WIDGET_KEY + '/preferences'),
+					{
+						refresh_seconds: payload.refreshSeconds,
+						max_items: payload.maxItems,
+					},
 				)
-				this.refreshIntervalSeconds = seconds
-				this.autoRefresh?.setIntervalMs(seconds * 1000)
+				this.refreshIntervalSeconds = payload.refreshSeconds
+				this.autoRefresh?.setIntervalMs(payload.refreshSeconds * 1000)
+				if (payload.maxItems !== null) {
+					this.maxItems = payload.maxItems
+				}
 				this.showSettings = false
-			} catch { /* silent — user can retry from within the still-open modal */ }
+				this.fetch()
+			} catch { /* silent */ }
 			finally {
 				this.savingSettings = false
 			}
@@ -233,7 +256,7 @@ export default {
 	gap: 4px;
 	padding: 4px 0;
 	overflow: hidden;
-	max-height: 500px;
+	max-height: 520px;
 }
 
 .i360-toolbar {
@@ -247,10 +270,23 @@ export default {
 
 .i360-status {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	gap: 8px;
-	padding: 16px 8px;
+	justify-content: center;
+	gap: 12px;
+	padding: 32px 12px;
 	color: var(--color-text-maxcontrast);
+	text-align: center;
+
+	&__icon {
+		opacity: 0.5;
+	}
+
+	&--error {
+		color: var(--color-error);
+
+		.i360-status__icon { opacity: 1; }
+	}
 }
 
 .i360-rows {
@@ -259,7 +295,9 @@ export default {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	// No max-height / internal scroll — v0.3.2 caps rows at 7 upstream.
+	max-height: 400px;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .i360-row {
@@ -271,10 +309,33 @@ export default {
 }
 
 .i360-row__link {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	padding: 6px 8px;
 	color: inherit;
 	text-decoration: none;
+	min-width: 0;
+}
+
+.i360-badge {
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	color: white;
+
+	&--approved { background: #16a34a; }
+	&--review   { background: #ea580c; }
+	&--draft    { background: #6b7280; }
+	&--archived { background: #4b5563; }
+	&--issues   { background: #dc2626; }
+}
+
+.i360-row__body {
+	flex: 1;
 	min-width: 0;
 }
 
@@ -300,7 +361,7 @@ export default {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px 6px;
-	margin-top: 3px;
+	margin-top: 2px;
 	font-size: 11px;
 	color: var(--color-text-maxcontrast);
 	min-width: 0;
@@ -312,11 +373,6 @@ export default {
 	&--dim { opacity: 0.7; }
 }
 
-/*
- * Solid, high-contrast risk chips — mapped to fixed hues (green/orange/
- * red/dark-red) rather than theme variables so severity reads at a
- * glance regardless of the user's Nextcloud theme.
- */
 .i360-risk {
 	flex-shrink: 0;
 	display: inline-block;

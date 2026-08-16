@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.2] — 2026-08-16
+## [0.3.3] — 2026-08-16
+
+### Added
+
+- **"Records to show" setting** on the three list widgets — new `MaxItemsPicker` component (5 / 10 / 20 / 50 / 100 records, default 10) rendered in the widget-settings modal below the refresh-frequency picker, matching `integration_forgejo_gitea`. Persisted per-user, whitelist-validated server-side against `ALLOWED_MAX_ITEMS = [5, 10, 20, 50, 100]`.
+- **New unified widget-preferences endpoint** `PUT /widget/{widgetKey}/preferences` that accepts both `refresh_seconds` and `max_items` in one call. Replaces the v0.3.2 `/widget/{k}/refresh-interval` endpoint (single call from the modal now persists both fields at once).
+- **Circular status badge on the left of every list row** — coloured background + white icon inside, matching the visual weight of the SuiteCRM Activities widget. Colour mapping: approved / completed → green + CheckCircle; under review / in progress → orange + ClockOutline; draft → grey + PencilOutline; archived → darker grey + ArchiveOutline; rejected / high risk → red + CloseCircle.
+- **Relative-time meta** on every list row ("2h ago", "3d ago", falls back to locale date past 7 days) using the same helper the Assessed widget already had. Approved widget prefers `approved_at`, Added widget uses `created_at`, Assessed uses `updated_at`.
+- **Simplified empty state** matching the `integration_forgejo_gitea` Reviews / Open Issues pattern — centred `CheckCircleOutline` icon (grey, low opacity) with a short one-liner. Replaces the more elaborate `NcEmptyContent` block used in v0.3.2.
+- **Scrollable list body** — `max-height: 400px` + `overflow-y: auto` on the rows container. With `max_items` now user-configurable up to 100, the list scrolls internally instead of pushing the widget outside its dashboard column.
+
+### Changed
+
+- **Removed `org_number` from vendor row meta.** Row now shows city · country · relative time. Org number is still returned by the API (visible in the vendor detail on ymir) but crowds the row without meaningful signal in a dashboard glance.
+- **Row layout switched to `[badge] [title + status chip] / [meta line]`.** Badge is 28 px round.
+- **`MAX_ITEMS_PER_WIDGET = 7` constant removed from the controller** — the per-widget setting supersedes it (default 10).
 
 ### Changed
 
