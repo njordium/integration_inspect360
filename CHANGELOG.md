@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8] — 2026-08-21
+
+### Fixed
+
+- Error-state icon on the four widgets was styled via CSS `color: var(--color-error)`. Vue material-design-icons wrappers honour their `fillColor` prop for the SVG fill, not the parent's CSS `color`, so the icon rendered as the theme default (pale). Switched to `fillColor="#dc2626"` (a solid red that reads clearly on both light and dark themes) so the icon actually signals the error.
+
 ## [0.4.7] — 2026-08-21
 
 ### Fixed

@@ -34,7 +34,7 @@
 		</div>
 
 		<div v-else-if="hardError" class="i360-status i360-status--error">
-			<AlertCircleOutlineIcon :size="40" class="i360-status__icon" />
+			<AlertCircleOutlineIcon :size="40" fillColor="#dc2626" class="i360-status__icon" />
 			<span>{{ hardError }}</span>
 		</div>
 
