@@ -214,9 +214,13 @@ export default {
 	text-align: center;
 
 	&__icon { opacity: 0.5; }
+	// Error state keeps the icon red (signals "error") but text stays on
+	// the main foreground colour — using `--color-error` for the text made
+	// it read as pale pink on light theme and disappeared against the
+	// widget's tinted background.
 	&--error {
-		color: var(--color-error);
-		.i360-status__icon { opacity: 1; }
+		color: var(--color-main-text);
+		.i360-status__icon { color: var(--color-error); opacity: 1; }
 	}
 }
 

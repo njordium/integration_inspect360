@@ -334,10 +334,15 @@ export default {
 		opacity: 0.5;
 	}
 
+	// Error state keeps the icon red but text stays on the main foreground
+	// colour so it remains readable against the widget's tinted background.
 	&--error {
-		color: var(--color-error);
+		color: var(--color-main-text);
 
-		.i360-status__icon { opacity: 1; }
+		.i360-status__icon {
+			color: var(--color-error);
+			opacity: 1;
+		}
 	}
 }
 

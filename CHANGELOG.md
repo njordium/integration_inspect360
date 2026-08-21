@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] — 2026-08-21
+
+### Fixed
+
+- Error-state text on the three list widgets and the Overview widget was set to `var(--color-error)`, which renders as a pale pink on Nextcloud's light theme and disappears against the tinted widget background. Error text now uses `var(--color-main-text)` (fully readable) while the icon keeps `var(--color-error)` red — the icon still signals the error, but the message the user needs to act on is legible.
+
 ## [0.4.6] — 2026-08-21
 
 ### Fixed

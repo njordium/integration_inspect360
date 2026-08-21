@@ -20,7 +20,7 @@ Each widget carries a per-user refresh cadence (Never / 30s / 1m / 5m default / 
 Sign in with your Inspect360 account from Personal Settings → Connected accounts. The app stores only the returned refresh token (encrypted via Nextcloud's ICrypto) and mints short-lived access tokens on demand for every API call.
 
 Only Inspect360 accounts without multi-factor authentication are supported in this release — accounts with MFA enforced or MFA-enrolment-required will see a targeted "not supported yet" message. Fuller MFA support arrives in a subsequent release.]]></description>
-	<version>0.4.6</version>
+	<version>0.4.7</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author homepage="https://njordium.com">Kim Haverblad</author>
 	<namespace>Inspect360</namespace>
