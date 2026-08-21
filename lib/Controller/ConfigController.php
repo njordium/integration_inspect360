@@ -86,10 +86,9 @@ class ConfigController extends Controller {
 	}
 
 	/**
-	 * OAuth 2.0 sign-in against Inspect360. Only the returned refresh
-	 * token is persisted (via ICrypto). On any policy-block outcome
-	 * returns the specific status code so the UI can render a targeted
-	 * message.
+	 * Sign in to Inspect360. Only the returned refresh token is
+	 * persisted (via ICrypto). On any policy-block outcome returns the
+	 * specific status code so the UI can render a targeted message.
 	 *
 	 * Nextcloud's bruteforce throttler is enabled on this endpoint (finding
 	 * H-M1): a session-authenticated user hammering the endpoint to

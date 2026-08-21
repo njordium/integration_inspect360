@@ -12,7 +12,7 @@
 
 		<div v-if="!state.connected" class="signin-form">
 			<p class="settings-hint">
-				{{ t('integration_inspect360', 'Sign in to Inspect360 via OAuth 2.0. Only the returned refresh token is stored.') }}
+				{{ t('integration_inspect360', 'Sign in to Inspect360 with your account. Only the returned refresh token is stored.') }}
 			</p>
 
 			<div class="grid-form">
@@ -139,7 +139,7 @@ export default {
 		policyBlockMessage() {
 			const b = this.policyBlock
 			if (b === 'mfa_required') {
-				return t('integration_inspect360', 'This account has multi-factor authentication enabled. MFA-protected accounts are not supported in this release. Wait for a future release with OAuth 2.0 support, or connect a service account without MFA.')
+				return t('integration_inspect360', 'This account has multi-factor authentication enabled. MFA-protected accounts are not supported in this release. Connect a service account without MFA, or wait for a future release.')
 			}
 			if (b === 'mfa_enrollment_required') {
 				return t('integration_inspect360', 'This account must enrol in multi-factor authentication before it can be used. Complete enrolment in Inspect360, then try connecting again from an MFA-exempt account.')

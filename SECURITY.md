@@ -18,10 +18,10 @@ Only the latest minor release receives security updates. As of writing, that is 
 
 ### Authentication
 
-- OAuth 2.0 authentication against Inspect360's `/api/v1/auth/` token endpoint. The user completes sign-in from Personal Settings; only the returned JWT refresh token is persisted.
+- Token-based authentication against Inspect360's `/api/v1/auth/` endpoint. The user completes sign-in from Personal Settings; only the returned refresh token is persisted.
 - Refresh token stored per-user in `oc_preferences`, encrypted at rest via Nextcloud's `ICrypto` (see `lib/Service/TokenStorage.php`).
 - Access tokens are minted on demand from the refresh token. They are cached (a) per-request in memory and (b) cross-request in Nextcloud's distributed cache (Redis / APCu / memcached) with TTL = `expires_in - 30 s`. They are **never persisted** to disk.
-- Nextcloud's bruteforce throttler (`#[BruteForceProtection]`) is attached to the OAuth sign-in endpoint — a session-authenticated user hammering the endpoint to enumerate Inspect360 accounts will be back-off-throttled per email after successive failures.
+- Nextcloud's bruteforce throttler (`#[BruteForceProtection]`) is attached to the sign-in endpoint — a session-authenticated user hammering the endpoint to enumerate Inspect360 accounts will be back-off-throttled per email after successive failures.
 - MFA-enabled accounts are intentionally rejected in this release with a targeted UI message (`mfa_required`, `mfa_enrollment_required`, `must_change_password`). Fuller MFA support arrives in a subsequent release.
 
 ### Authorization
@@ -55,7 +55,7 @@ Only the latest minor release receives security updates. As of writing, that is 
 
 - **JWT signature is not verified on the Nextcloud side.** The token was just received over TLS from the trusted upstream in the same round-trip; we hold only cosmetic claims (`sub`, `role`) from it and re-check nothing security-relevant. The upstream server verifies the signature on every subsequent API call. We do not hold the HS256 shared secret and cannot verify without it.
 - **Best-effort upstream logout is a guess** (`POST /api/v1/auth/logout` with the refresh token). Endpoint URL and body shape are educated guesses pending verification against ymir. A missing endpoint (404) is silently accepted — local state is always cleared regardless.
-- **Refresh endpoint shape is unverified.** `POST /api/v1/auth/refresh` with `{"refresh_token": "..."}` is an educated OAuth-2-style guess. First real 15-minute token expiry against a live instance will confirm; adjust in `Inspect360AuthService::refreshAndCache()` if wrong.
+- **Refresh endpoint shape is unverified.** `POST /api/v1/auth/refresh` with `{"refresh_token": "..."}` is an educated guess based on standard token-refresh conventions. First real 15-minute token expiry against a live instance will confirm; adjust in `Inspect360AuthService::refreshAndCache()` if wrong.
 - **`nextcloud/ocp` composer dev-dep is pinned to `dev-stable30`.** The app declares NC 30–35 compatibility but phpstan lints against the NC30 OCP surface only. Bump before v1.0.
 
 ## Threat model

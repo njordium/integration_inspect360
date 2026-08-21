@@ -12,7 +12,7 @@ return [
 		['name' => 'config#setConfig', 'url' => '/config', 'verb' => 'PUT'],
 		['name' => 'config#setAdminConfig', 'url' => '/admin-config', 'verb' => 'PUT'],
 
-		// OAuth 2.0 authentication endpoints.
+		// Authentication endpoints.
 		['name' => 'config#credentialLogin', 'url' => '/login', 'verb' => 'POST'],
 		['name' => 'config#disconnect', 'url' => '/disconnect', 'verb' => 'POST'],
 		['name' => 'config#connectionStatus', 'url' => '/connection-status', 'verb' => 'GET'],

@@ -105,7 +105,7 @@ class Inspect360AuthService {
 	}
 
 	/**
-	 * OAuth 2.0 sign-in against the Inspect360 token endpoint. On success,
+	 * Sign in against the Inspect360 authentication endpoint. On success,
 	 * persists the refresh token and identity fields; on any policy-block
 	 * returns the specific status code so the UI can surface a targeted
 	 * message rather than a generic "sign-in failed".
@@ -227,7 +227,7 @@ class Inspect360AuthService {
 
 	/**
 	 * Clear all per-user auth state. The user will need to complete an
-	 * OAuth 2.0 sign-in again to reconnect.
+	 * sign in again to reconnect.
 	 *
 	 * Best-effort attempts an upstream refresh-token revocation before
 	 * clearing local state (finding H-L1) so a leaked Nextcloud config
@@ -296,7 +296,7 @@ class Inspect360AuthService {
 	 * of 4 widgets show Not connected") into a normal cache hit.
 	 *
 	 * NOTE: refresh endpoint URL + request body shape are educated guesses
-	 * based on OAuth 2 conventions. First real integration run against
+	 * based on standard token-refresh conventions. First real integration run against
 	 * ymir will confirm — adjust here if the endpoint is `/auth/token/refresh`
 	 * or the body key is `refresh` instead of `refresh_token`.
 	 */

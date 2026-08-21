@@ -6,7 +6,7 @@
 
 ![Dashboard widgets](img/screenshot.png)
 
-> Njordium-authored Nextcloud integration for [Njordium Inspect360](https://njordium.com/products/inspect360/). Nextcloud **30 to 35**, PHP **8.3+**, Vue 3 / `@nextcloud/vue` v9, **OAuth 2.0** authentication with JWT bearer tokens, five configurable dashboard widgets: an eight-tile KPI **Overview**, three vendor-lifecycle lists (**Approved**, **In Progress**, **Added Vendors**), and a recent **Assessed** feed. Per-widget refresh cadence, records-to-show, coloured status badges, relative-time meta, and every row deep-links back into ymir.
+> Njordium-authored Nextcloud integration for [Njordium Inspect360](https://njordium.com/products/inspect360/). Nextcloud **30 to 35**, PHP **8.3+**, Vue 3 / `@nextcloud/vue` v9, token-based authentication with encrypted refresh tokens, five configurable dashboard widgets: an eight-tile KPI **Overview**, three vendor-lifecycle lists (**Approved**, **In Progress**, **Added Vendors**), and a recent **Assessed** feed. Per-widget refresh cadence, records-to-show, coloured status badges, relative-time meta, and every row deep-links back into ymir.
 
 Bring the parts of Inspect360 that a governance, risk or compliance team checks ten times a day into the Nextcloud dashboard. Vendor pipeline state, recent assessments, KPI counts across the supplier lifecycle, and one-click deep links to the corresponding page inside Inspect360. All configurable per user, per widget.
 
@@ -57,10 +57,10 @@ All widgets share a `useAutoRefresh` composable that sets a `setInterval` at the
 
 ### Security
 
-- **OAuth 2.0 authentication** against Inspect360's `/api/v1/auth/` token endpoint. The user completes sign-in from Personal Settings. Only the returned JWT refresh token is persisted.
+- **Token-based authentication** against Inspect360's `/api/v1/auth/` endpoint. The user completes sign-in from Personal Settings. Only the returned refresh token is persisted.
 - **Refresh token encrypted at rest** via Nextcloud's `ICrypto` (AES-256-CBC with the per-instance secret). Decryption failures return empty and force reconnect, never surface as errors.
 - **Access tokens never persisted**. Minted on demand from the refresh token and cached in a distributed cache (Redis, APCu, memcached) for `expires_in - 30 s` per user, so parallel dashboard-load requests coalesce to one refresh call instead of a thundering herd.
-- **Bruteforce protection** via Nextcloud's `#[BruteForceProtection]` on the OAuth sign-in endpoint. A session-authenticated user cannot use the Nextcloud instance to launder authentication attempts against Inspect360.
+- **Bruteforce protection** via Nextcloud's `#[BruteForceProtection]` on the sign-in endpoint. A session-authenticated user cannot use the Nextcloud instance to launder authentication attempts against Inspect360.
 - **SSRF hardening on the admin `instance_url`**. Cloud-metadata hostnames (`metadata.google.internal`, `169.254.169.254`, and so on) and any host that resolves to an RFC1918, link-local or reserved IP range are rejected at admin-save time, independently of Nextcloud's `allow_local_remote_servers` flag. Loopback is deliberately allowed for dev.
 - **Sensitive data redacted from logs**. Tokens are stripped from log messages before write. Upstream HTTP statuses are bucketed to `upstream_client_error` or `upstream_server_error` before the browser sees them.
 - **Widget-key whitelist** on the per-widget preferences endpoint prevents authenticated users from populating `oc_preferences` with arbitrary rows.
@@ -135,7 +135,7 @@ Each user connects their own Inspect360 account:
 
 **Settings → Personal → Connected accounts → Inspect360 integration**
 
-Complete OAuth 2.0 sign-in with your Inspect360 account and click **Sign in**. Only the returned refresh token is stored (encrypted). You will see **Connected as {email}** with your Inspect360 role chip when done. Click **Disconnect** at any time to revoke locally and best-effort revoke upstream.
+Sign in with your Inspect360 account and click **Sign in**. Only the returned refresh token is stored (encrypted). You will see **Connected as {email}** with your Inspect360 role chip when done. Click **Disconnect** at any time to revoke locally and best-effort revoke upstream.
 
 ### Widget settings (per user, per widget)
 
