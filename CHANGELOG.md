@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-08-21
+
+### Fixed
+
+- Trimmed `appinfo/info.xml` `<summary>` from 147 to 107 chars. The App Store validator rejects any summary over 128 chars (per the `apps/info.xsd` `maxLength` facet). New summary: *"Njordium Inspect360 integration for Nextcloud. Vendor pipeline, assessments and KPIs on your dashboard."*
+
 ## [0.4.5] — 2026-08-16
 
 ### Fixed — PHPUnit CI
