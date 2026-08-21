@@ -18,16 +18,17 @@ use Throwable;
 use OCA\Inspect360\AppInfo\Application;
 
 /**
- * Owns the Inspect360 OAuth 2.0 authentication lifecycle:
+ * Owns the Inspect360 authentication lifecycle:
  *
- *   1. login()           — obtain the initial token pair via Inspect360's
- *                          OAuth 2.0 endpoint, persist the refresh token,
- *                          cache the access token, extract identity from JWT.
+ *   1. login()           — obtain the initial token pair from Inspect360,
+ *                          persist the refresh token, cache the access
+ *                          token, extract identity from JWT claims.
  *   2. getAccessToken()  — returns the cached access token; on cache miss,
  *                          refreshes from the stored refresh token.
- *   3. refresh()         — OAuth 2.0 refresh-token grant; updates cache + storage.
- *   4. disconnect()      — clear refresh token + identity config; best-effort
- *                          upstream token revoke.
+ *   3. refresh()         — mints a new access token from the stored
+ *                          refresh token; updates cache and storage.
+ *   4. disconnect()      — clears refresh token + identity config;
+ *                          best-effort upstream token revoke.
  *   5. getConnectionStatus() — for the personal settings UI.
  */
 class Inspect360AuthService {
